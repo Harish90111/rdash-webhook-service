@@ -80,3 +80,19 @@ class WebhookDataModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 DeliveryAttempt.objects.create(event=event, subscription=subscription)
+
+    def test_event_payload_round_trips_nested_json(self):
+        event = WebhookEvent.objects.create(
+            tenant=self.tenant,
+            event_type="po.created",
+            payload={
+                "id": "PO-2",
+                "lines": [{"sku": "SKU-1", "qty": 2}],
+                "attributes": {"priority": "high"},
+            },
+        )
+
+        stored = WebhookEvent.objects.get(id=event.id)
+
+        assert stored.payload["lines"][0]["sku"] == "SKU-1"
+        assert stored.payload["attributes"]["priority"] == "high"

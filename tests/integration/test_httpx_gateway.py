@@ -29,6 +29,26 @@ def test_httpx_gateway_posts_request_and_truncates_response_body():
     assert len(response.body) == DEFAULT_RESPONSE_BODY_LIMIT
 
 
+def test_httpx_gateway_returns_response_headers_for_downstream_retry_logic():
+    def handler(request):
+        return httpx.Response(
+            429,
+            text="slow down",
+            headers={"Retry-After": "30", "X-Trace-Id": "trace-123"},
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    gateway = HttpxWebhookGateway(client=client)
+
+    response = gateway.post(HttpRequest(url="https://example.test/webhook", body="{}", headers={}))
+
+    assert response.status_code == 429
+    assert response.is_success is False
+    assert response.body == "slow down"
+    assert response.headers["retry-after"] == "30"
+    assert response.headers["x-trace-id"] == "trace-123"
+
+
 def test_httpx_gateway_uses_strict_timeout_values():
     gateway = HttpxWebhookGateway()
 
@@ -77,3 +97,6 @@ def test_httpx_gateway_rejects_invalid_configuration():
 
     with pytest.raises(ValueError, match="max_transport_retries"):
         HttpxWebhookGateway(max_transport_retries=-1)
+
+    with pytest.raises(ValueError, match="retry_backoff_seconds"):
+        HttpxWebhookGateway(retry_backoff_seconds=-1)

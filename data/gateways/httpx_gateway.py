@@ -137,7 +137,7 @@ class HttpxWebhookGateway(HttpGateway):
 
     @staticmethod
     def _flatten_headers(headers: Mapping[str, str]) -> Mapping[str, str]:
-        return {str(key): str(value) for key, value in headers.items()}
+        return {str(key).lower(): str(value) for key, value in headers.items()}
 
     @staticmethod
     def _log_response(
