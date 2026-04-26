@@ -1,145 +1,73 @@
-# Django-specific
-*.pyc
+# Python bytecode and caches
 __pycache__/
-*.pyo
-*.egg-info/
-dist/
-build/
-*.egg
-.Python
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+*.py[cod]
+*$py.class
 
-# Python virtual environments
+# Virtual environments
 .venv/
 venv/
 env/
 ENV/
-env.bak/
-venv.bak/
-.virtualenv
+.virtualenv/
 
-# IDE and editor settings
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-*.sublime-project
-*.sublime-workspace
-.vim/
-.emacs.d/
-
-# Environment variables and secrets
+# Environment files and secrets
 .env
 .env.local
 .env.*.local
 .env.production.local
 .env.development.local
+!.env.example
 
-# Logs and temporary files
+# Logs and runtime files
 logs/
 *.log
-*.pot
 *.pid
-tmp/
-temp/
+*.pid.lock
+celerybeat-schedule
+celery_beat.db
+dump.rdb
+*.sock
 
-# Testing and coverage
+# Local databases
+db.sqlite3
+db.sqlite3-journal
+*.sqlite
+*.sqlite3
+*.db
+
+# Test, coverage, and type-checker outputs
 .pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
-.tox/
 .hypothesis/
-
-# Celery
-celerybeat-schedule
-celery_beat.db
-
-# Database and migrations (except initial)
-*.db
-*.sqlite
-db/
-data/migrations/__pycache__/
-
-# Node/npm (if frontend tools are used)
-node_modules/
-npm-debug.log
-yarn-error.log
-.npm
-package-lock.json
-
-# OS-specific
-Thumbs.db
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Docker-related (dev containers, but not compose file)
-.dockerignore
-docker-compose.override.yml
-
-# IDE caches
-.python-version
+.tox/
 .mypy_cache/
-.dmypy.json
-dmypy.json
+.ruff_cache/
 .pyre/
+dmypy.json
+.dmypy.json
 
-# Secrets and credentials (never commit these)
-.aws/
-.ssh/
-credentials.json
-secrets.json
-api_keys.txt
-
-# Redis and broker files
-dump.rdb
-*.sock
-
-# Any local development files
-local_*.py
-test_local*.py
-
-# Mac OS
-.AppleDouble
-.LSOverride
-._*
-
-# Windows
-ehthumbs.db
-Desktop.ini
-
-# Poetry
-poetry.lock
-
-# Pip
+# Build and packaging outputs
+build/
+dist/
+*.egg-info/
+*.egg
+.Python
 pip-log.txt
 pip-delete-this-directory.txt
 
-# VS Code specific
-.vscode/extensions/
-.vscode/launch.json
-.vscode/settings.json
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-# Django migrations in dev (keep initial)
-data/migrations/[0-9]*.py
-data/migrations/[0-9]*.pyc
-
-# Pycache in migrations
-data/migrations/__pycache__/
-
-# Large data files
-*.csv
-*.xlsx
-*.xls
-*.sql
-*.bak
-
-# Media and static files (if generated)
-/media/
-/staticfiles/
-/static/collected/
+# Local overrides
+local_settings.py
+local_*.py
+test_local*.py
