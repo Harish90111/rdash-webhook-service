@@ -10,6 +10,7 @@ from django.utils import timezone
 from data.gateways import HttpxWebhookGateway
 from data.repositories import (
     DEFAULT_FANOUT_TASK_NAME,
+    DjangoCircuitBreaker,
     DjangoDeliveryAttemptRepository,
     DjangoEventRepository,
     DjangoOutboxRepository,
@@ -132,6 +133,7 @@ def deliver_webhook(self, attempt_id: str, tenant_id: str):
             delivery_attempt_repository=DjangoDeliveryAttemptRepository(),
             http_gateway=gateway,
             enqueue_retry=enqueue_retry,
+            circuit_breaker=DjangoCircuitBreaker(),
             max_retries=int(getattr(settings, "WEBHOOK_MAX_RETRIES", 5)),
             base_retry_delay=float(getattr(settings, "WEBHOOK_BASE_RETRY_DELAY", 1.0)),
             max_retry_delay=float(getattr(settings, "WEBHOOK_MAX_RETRY_DELAY", 60.0)),

@@ -424,6 +424,18 @@ The service records delivery attempts, exposes tenant-scoped listing through
 `GET /api/deliveries/`, and supports immediate manual retry through
 `POST /api/deliveries/{id}/retry/`.
 
+To protect subscribers and workers from repeated failing targets, outbound
+delivery also uses a per-tenant circuit breaker keyed by target URL:
+
+- the breaker opens after `5` consecutive failures by default
+- while open, delivery attempts are short-circuited without making an HTTP call
+- after `60s` by default, one half-open probe is allowed
+- a successful probe closes the breaker and resets the failure count
+- a failed probe reopens it
+
+The breaker delay is folded into retry scheduling so attempts do not burn
+through the retry budget while the target is still cooling down.
+
 Default delivery settings:
 
 - connect timeout: `5s`
@@ -432,3 +444,5 @@ Default delivery settings:
 - base retry delay: `1s`
 - max retry delay: `60s`
 - jitter factor: `0.1`
+- circuit breaker failure threshold: `5`
+- circuit breaker recovery timeout: `60s`

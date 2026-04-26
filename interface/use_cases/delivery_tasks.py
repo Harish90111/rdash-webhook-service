@@ -2,12 +2,13 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 from domain.entities import DeliveryAttempt, DeliveryStatus
 from domain.exceptions import DeliveryFailedError, DuplicateEventError
 from domain.interfaces import (
+    CircuitBreaker,
     DeliveryAttemptRepository,
     EventRepository,
     HttpGateway,
@@ -100,6 +101,7 @@ class DeliverWebhook:
         delivery_attempt_repository: DeliveryAttemptRepository,
         http_gateway: HttpGateway,
         enqueue_retry: Callable[[DeliveryAttempt, str, float], None],
+        circuit_breaker: Optional[CircuitBreaker] = None,
         max_retries: int,
         base_retry_delay: float,
         max_retry_delay: float,
@@ -112,6 +114,7 @@ class DeliverWebhook:
         self.delivery_attempt_repository = delivery_attempt_repository
         self.http_gateway = http_gateway
         self.enqueue_retry = enqueue_retry
+        self.circuit_breaker = circuit_breaker
         self.max_retries = max_retries
         self.base_retry_delay = base_retry_delay
         self.max_retry_delay = max_retry_delay
@@ -129,6 +132,18 @@ class DeliverWebhook:
 
         body = self._build_body(event)
         timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+        if self.circuit_breaker is not None:
+            breaker_decision = self.circuit_breaker.before_request(
+                tenant_id=tenant_id,
+                target_url=subscription.target_url,
+            )
+            if not breaker_decision.allowed:
+                return self._record_failure(
+                    attempt,
+                    tenant_id,
+                    "Circuit breaker open for target URL.",
+                    retry_delay_seconds=breaker_decision.retry_after_seconds,
+                )
         try:
             signing_secret = self._subscription_signing_secret(subscription)
             response = self.http_gateway.post(
@@ -150,9 +165,19 @@ class DeliverWebhook:
                 )
             )
             if response.is_success:
+                if self.circuit_breaker is not None:
+                    self.circuit_breaker.record_success(
+                        tenant_id=tenant_id,
+                        target_url=subscription.target_url,
+                    )
                 attempt.mark_success(response.status_code, response.body)
                 return self.delivery_attempt_repository.update(attempt, tenant_id)
 
+            if self.circuit_breaker is not None:
+                self.circuit_breaker.record_failure(
+                    tenant_id=tenant_id,
+                    target_url=subscription.target_url,
+                )
             error_message = f"Webhook endpoint returned HTTP {response.status_code}."
             return self._record_failure(
                 attempt,
@@ -162,6 +187,11 @@ class DeliverWebhook:
                 response_body=response.body,
             )
         except Exception as exc:
+            if self.circuit_breaker is not None:
+                self.circuit_breaker.record_failure(
+                    tenant_id=tenant_id,
+                    target_url=subscription.target_url,
+                )
             return self._record_failure(attempt, tenant_id, str(exc) or exc.__class__.__name__)
 
     def _record_failure(
@@ -172,6 +202,7 @@ class DeliverWebhook:
         *,
         status_code: Optional[int] = None,
         response_body: Optional[str] = None,
+        retry_delay_seconds: Optional[float] = None,
     ) -> DeliveryAttempt:
         safe_error_message = error_message or "Webhook delivery failed."
         attempt.mark_failed(safe_error_message, status_code=status_code, response_body=response_body)
@@ -182,6 +213,12 @@ class DeliverWebhook:
                 max_delay=self.max_retry_delay,
                 jitter_factor=self.retry_jitter,
             )
+            if retry_delay_seconds is not None:
+                circuit_retry_at = datetime.utcnow() + timedelta(
+                    seconds=max(0.0, retry_delay_seconds)
+                )
+                if circuit_retry_at > next_retry_at:
+                    next_retry_at = circuit_retry_at
             attempt.mark_retrying(next_retry_at)
             persisted_attempt = self.delivery_attempt_repository.update(attempt, tenant_id)
             countdown_seconds = max(0.0, (next_retry_at - datetime.utcnow()).total_seconds())

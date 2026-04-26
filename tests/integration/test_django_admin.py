@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from data.models.models import (
+    CircuitBreakerState,
     DeliveryAttempt,
     OutboxMessage,
     Subscription,
@@ -33,6 +34,7 @@ class DjangoAdminTests(TestCase):
         assert WebhookEvent in registered_models
         assert DeliveryAttempt in registered_models
         assert OutboxMessage in registered_models
+        assert CircuitBreakerState in registered_models
 
     def test_admin_can_create_subscription_with_plain_secret(self):
         response = self.client.post(

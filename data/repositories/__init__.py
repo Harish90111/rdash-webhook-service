@@ -5,6 +5,7 @@ from data.repositories.api_keys import (
     DjangoTenantAPIKeyRepository,
     IssuedTenantAPIKey,
 )
+from data.repositories.circuit_breakers import DjangoCircuitBreaker
 from data.repositories.delivery_attempts import DjangoDeliveryAttemptRepository
 from data.repositories.events import DjangoEventRepository
 from data.repositories.outbox import (
@@ -19,6 +20,7 @@ from data.repositories.subscriptions import DjangoSubscriptionRepository
 __all__ = [
     "DEFAULT_FANOUT_TASK_NAME",
     "AuthenticatedTenantAPIKey",
+    "DjangoCircuitBreaker",
     "DjangoDeliveryAttemptRepository",
     "DjangoEventRepository",
     "DjangoOutboxRepository",
