@@ -62,6 +62,9 @@ class InMemoryDeliveryAttemptRepository:
             subscription_id="subscription-1",
         )
 
+    def claim_for_delivery(self, attempt_id: str, tenant_id: str):
+        return self.get_by_id(attempt_id, tenant_id)
+
     def find_by_event_and_subscription(
         self,
         event_id: str,

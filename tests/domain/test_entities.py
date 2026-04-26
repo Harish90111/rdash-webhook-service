@@ -52,6 +52,21 @@ def test_subscription_activation_updates_timestamp():
     assert subscription.updated_at >= original_updated_at
 
 
+def test_subscription_rotate_secret_updates_value_and_timestamp():
+    subscription = Subscription(
+        tenant_id="tenant-1",
+        event_type="po.created",
+        target_url="https://example.test/webhook",
+        secret="old-secret",
+    )
+    original_updated_at = subscription.updated_at
+
+    subscription.rotate_secret("new-secret")
+
+    assert subscription.secret == "new-secret"
+    assert subscription.updated_at >= original_updated_at
+
+
 def test_webhook_event_copies_payload_and_marks_processed():
     payload = {"po_id": "PO-1"}
     event = WebhookEvent(
@@ -94,6 +109,11 @@ def test_delivery_attempt_state_transitions_and_truncation():
     assert attempt.status == DeliveryStatus.RETRYING
     assert attempt.next_retry_at == retry_at
     assert attempt.attempt_number == 2
+    assert attempt.completed_at is None
+
+    attempt.mark_in_progress()
+    assert attempt.status == DeliveryStatus.IN_PROGRESS
+    assert attempt.next_retry_at is None
     assert attempt.completed_at is None
 
     attempt.mark_success(204, response_body="ok")
