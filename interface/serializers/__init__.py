@@ -1,5 +1,9 @@
 """DRF serializers for request and response translation."""
 
+from interface.serializers.deliveries import (
+    DeliveryAttemptListQuerySerializer,
+    DeliveryAttemptResponseSerializer,
+)
 from interface.serializers.subscriptions import (
     SubscriptionCreateSerializer,
     SubscriptionPatchSerializer,
@@ -12,6 +16,8 @@ from interface.serializers.monitoring import (
 )
 
 __all__ = [
+    "DeliveryAttemptListQuerySerializer",
+    "DeliveryAttemptResponseSerializer",
     "EventIngestSerializer",
     "EventResponseSerializer",
     "HealthCheckResponseSerializer",
