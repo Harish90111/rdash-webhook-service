@@ -76,6 +76,16 @@ class InMemoryDeliveryAttemptRepository:
     def list_for_event(self, event_id: str, tenant_id: str):
         return []
 
+    def list_by_tenant(
+        self,
+        tenant_id: str,
+        *,
+        status: str = None,
+        event_id: str = None,
+        subscription_id: str = None,
+    ):
+        return []
+
     def update(self, attempt: DeliveryAttempt, tenant_id: str) -> DeliveryAttempt:
         return attempt
 

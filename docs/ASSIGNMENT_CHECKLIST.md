@@ -23,7 +23,7 @@
 
 - [x] Django admin for operational inspection
 - [x] Metrics endpoint
-- [ ] `GET /deliveries/` listing endpoint
+- [x] `GET /deliveries/` listing endpoint
 - [ ] `POST /deliveries/{id}/retry` manual retry endpoint
 - [ ] Circuit breaker per target URL
 
@@ -32,5 +32,5 @@
 - Delivery isolation is good for this scope through queue bucketing and rate
   limiting, but it is not yet a full per-target fairness or circuit-breaker
   design.
-- The runtime API intentionally focuses on ingestion, subscriptions, health,
-  and metrics. Delivery listing and manual replay remain backlog items.
+- The runtime API now covers ingestion, subscriptions, health, metrics, and
+  delivery visibility. Manual replay remains a backlog item.

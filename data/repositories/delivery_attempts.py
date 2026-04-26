@@ -95,6 +95,23 @@ class DjangoDeliveryAttemptRepository:
         queryset = self._tenant_scoped_queryset(tenant_id).filter(event_id=event_id)
         return [self._to_domain(model) for model in queryset]
 
+    def list_by_tenant(
+        self,
+        tenant_id: str,
+        *,
+        status: Optional[str] = None,
+        event_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+    ) -> Sequence[DeliveryAttempt]:
+        queryset = self._tenant_scoped_queryset(tenant_id)
+        if status:
+            queryset = queryset.filter(status=status)
+        if event_id:
+            queryset = queryset.filter(event_id=event_id)
+        if subscription_id:
+            queryset = queryset.filter(subscription_id=subscription_id)
+        return [self._to_domain(model) for model in queryset]
+
     def update(self, attempt: DeliveryAttempt, tenant_id: str) -> DeliveryAttempt:
         model = self._get_model(attempt.id, tenant_id)
         model.status = attempt.status.value

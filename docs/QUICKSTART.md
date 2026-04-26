@@ -113,6 +113,16 @@ curl http://localhost:8000/api/health/
 curl -H "X-API-Key: YOUR_API_KEY" http://localhost:8000/api/metrics/
 ```
 
+## 8. Inspect delivery attempts
+
+```bash
+curl -G http://localhost:8000/api/deliveries/ \
+  -H "X-API-Key: YOUR_API_KEY" \
+  --data-urlencode "status=retrying" \
+  --data-urlencode "page=1" \
+  --data-urlencode "page_size=20"
+```
+
 ## Testing shortcuts
 
 ```bash

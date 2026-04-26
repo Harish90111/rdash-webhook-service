@@ -135,6 +135,7 @@ Examples below use `X-API-Key`.
 
 - `GET /api/health/`
 - `GET /api/metrics/`
+- `GET /api/deliveries/`
 - `POST /api/events/`
 - `GET /api/subscriptions/`
 - `POST /api/subscriptions/`
@@ -220,6 +221,22 @@ New event response:
 If the same idempotency key is replayed for the same tenant, the service
 returns the existing event with `idempotent_replay: true` instead of creating a
 duplicate.
+
+### 3. Inspect delivery attempts
+
+```bash
+curl -G http://localhost:8000/api/deliveries/ \
+  -H "X-API-Key: YOUR_API_KEY" \
+  --data-urlencode "status=retrying" \
+  --data-urlencode "page=1" \
+  --data-urlencode "page_size=20"
+```
+
+The delivery listing is tenant-scoped and supports filtering by:
+
+- `status`
+- `event_id`
+- `subscription_id`
 
 ## Webhook Delivery Contract
 
@@ -307,6 +324,7 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 - admin UI for tenants, API keys, subscriptions, events, attempts, and outbox
 - `GET /api/health/` for service health
 - `GET /api/metrics/` for tenant-scoped metrics
+- `GET /api/deliveries/` for tenant-scoped delivery visibility
 
 ## Documentation
 
@@ -318,7 +336,6 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 
 ## Current Deliberate Cuts
 
-- no runtime delivery listing endpoint yet
 - no manual retry endpoint yet
 - no per-target circuit breaker yet
 

@@ -97,6 +97,27 @@ class MemoryDeliveryAttemptRepository:
     def list_for_event(self, event_id, tenant_id):
         return [attempt for attempt in self.attempts.values() if attempt.event_id == event_id]
 
+    def list_by_tenant(
+        self,
+        tenant_id,
+        *,
+        status=None,
+        event_id=None,
+        subscription_id=None,
+    ):
+        attempts = list(self.attempts.values())
+        if status is not None:
+            attempts = [attempt for attempt in attempts if attempt.status.value == status]
+        if event_id is not None:
+            attempts = [attempt for attempt in attempts if attempt.event_id == event_id]
+        if subscription_id is not None:
+            attempts = [
+                attempt
+                for attempt in attempts
+                if attempt.subscription_id == subscription_id
+            ]
+        return attempts
+
     def update(self, attempt, tenant_id):
         self.attempts[(attempt.event_id, attempt.subscription_id)] = attempt
         return attempt

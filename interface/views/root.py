@@ -19,6 +19,7 @@ class APIRootView(ThinAPIView):
                 "endpoints": {
                     "health": "/api/health/",
                     "metrics": "/api/metrics/",
+                    "deliveries": "/api/deliveries/",
                     "events": "/api/events/",
                     "subscriptions": "/api/subscriptions/",
                 },

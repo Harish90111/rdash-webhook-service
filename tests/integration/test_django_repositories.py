@@ -249,6 +249,75 @@ class DjangoRepositoryTests(TestCase):
         assert claimed.status == DeliveryStatus.IN_PROGRESS
         assert claimed.next_retry_at is None
 
+    def test_delivery_attempt_list_by_tenant_supports_filters_and_tenant_scope(self):
+        subscription = self.subscriptions.create(
+            Subscription(
+                tenant_id=str(self.tenant.id),
+                event_type="po.created",
+                target_url="https://example.test/webhook",
+                secret="secret-hash",
+            )
+        )
+        other_subscription = self.subscriptions.create(
+            Subscription(
+                tenant_id=str(self.other_tenant.id),
+                event_type="po.created",
+                target_url="https://other.example.test/webhook",
+                secret="secret-hash",
+            )
+        )
+        first_event = self.events.create(
+            WebhookEvent(
+                tenant_id=str(self.tenant.id),
+                event_type="po.created",
+                payload={"id": "PO-4"},
+            )
+        )
+        second_event = self.events.create(
+            WebhookEvent(
+                tenant_id=str(self.tenant.id),
+                event_type="po.updated",
+                payload={"id": "PO-5"},
+            )
+        )
+        other_event = self.events.create(
+            WebhookEvent(
+                tenant_id=str(self.other_tenant.id),
+                event_type="po.created",
+                payload={"id": "PO-6"},
+            )
+        )
+
+        success_attempt = self.attempts.create(
+            DeliveryAttempt(event_id=first_event.id, subscription_id=subscription.id),
+            str(self.tenant.id),
+        )
+        success_attempt.mark_success(200, "ok")
+        self.attempts.update(success_attempt, str(self.tenant.id))
+
+        retrying_attempt = self.attempts.create(
+            DeliveryAttempt(event_id=second_event.id, subscription_id=subscription.id),
+            str(self.tenant.id),
+        )
+        retrying_attempt.mark_retrying(timezone.now() + timedelta(seconds=60))
+        self.attempts.update(retrying_attempt, str(self.tenant.id))
+
+        other_attempt = self.attempts.create(
+            DeliveryAttempt(event_id=other_event.id, subscription_id=other_subscription.id),
+            str(self.other_tenant.id),
+        )
+        other_attempt.mark_success(200, "ok")
+        self.attempts.update(other_attempt, str(self.other_tenant.id))
+
+        listed = self.attempts.list_by_tenant(str(self.tenant.id), status=DeliveryStatus.SUCCESS.value)
+        filtered_by_event = self.attempts.list_by_tenant(
+            str(self.tenant.id),
+            event_id=second_event.id,
+        )
+
+        assert [attempt.id for attempt in listed] == [success_attempt.id]
+        assert [attempt.id for attempt in filtered_by_event] == [retrying_attempt.id]
+
 
 class DjangoTenantAPIKeyRepositoryTests(TestCase):
     def setUp(self):
