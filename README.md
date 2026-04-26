@@ -348,6 +348,12 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 - `GET /api/deliveries/` for tenant-scoped delivery visibility
 - `POST /api/deliveries/{id}/retry/` for manual requeue of failed attempts
 
+The metrics payload also includes:
+
+- `events.oldest_pending_age_seconds`
+- `deliveries.lag_seconds`
+- `outbox.oldest_backlog_age_seconds`
+
 ## Documentation
 
 - [DESIGN.md](./DESIGN.md)
@@ -361,7 +367,6 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 The assignment checklist is now covered end to end in
 [docs/ASSIGNMENT_CHECKLIST.md](./docs/ASSIGNMENT_CHECKLIST.md).
 
-The remaining work is polish rather than a missing feature:
+The remaining work is operational polish rather than a missing feature:
 
-- richer metrics such as delivery lag and oldest pending event age
-- a more explicit OpenAPI security scheme for the custom API key auth
+- local Python `3.8` still emits a `cryptography` deprecation warning during tests

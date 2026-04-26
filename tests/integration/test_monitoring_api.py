@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from django.test import TestCase
 from django.utils import timezone
@@ -98,6 +99,15 @@ class MonitoringEndpointTests(TestCase):
             payload={"id": "PO-2"},
             processed=False,
         )
+        WebhookEvent.objects.filter(id=event_dead_letter.id).update(
+            received_at=timezone.now() - timedelta(seconds=180)
+        )
+        event_retrying = WebhookEvent.objects.create(
+            tenant=self.tenant,
+            event_type="po.created",
+            payload={"id": "PO-3"},
+            processed=False,
+        )
         other_event = WebhookEvent.objects.create(
             tenant=self.other_tenant,
             event_type="po.created",
@@ -117,6 +127,15 @@ class MonitoringEndpointTests(TestCase):
             status=DeliveryStatus.DEAD_LETTER,
             completed_at=timezone.now(),
         )
+        delayed_attempt = DeliveryAttempt.objects.create(
+            event=event_retrying,
+            subscription=subscription,
+            status=DeliveryStatus.RETRYING,
+            next_retry_at=timezone.now() + timedelta(seconds=30),
+        )
+        DeliveryAttempt.objects.filter(id=delayed_attempt.id).update(
+            created_at=timezone.now() - timedelta(seconds=240)
+        )
         DeliveryAttempt.objects.create(
             event=other_event,
             subscription=other_subscription,
@@ -135,6 +154,15 @@ class MonitoringEndpointTests(TestCase):
             task_name="interface.tasks.replay_event",
             status=OutboxStatus.FAILED,
         )
+        stale_outbox = OutboxMessage.objects.create(
+            tenant=self.tenant,
+            event=event_dead_letter,
+            task_name="interface.tasks.requeue_event",
+            status=OutboxStatus.IN_PROGRESS,
+        )
+        OutboxMessage.objects.filter(id=stale_outbox.id).update(
+            available_at=timezone.now() - timedelta(seconds=300)
+        )
         OutboxMessage.objects.create(
             tenant=self.other_tenant,
             event=other_event,
@@ -148,16 +176,23 @@ class MonitoringEndpointTests(TestCase):
         payload = response.data["data"]
         assert payload["tenant_id"] == str(self.tenant.id)
         assert payload["subscriptions"] == {"total": 1, "active": 1}
-        assert payload["events"] == {"received": 2, "processed": 1, "pending": 1}
-        assert payload["deliveries"]["total"] == 2
+        assert payload["events"]["received"] == 3
+        assert payload["events"]["processed"] == 1
+        assert payload["events"]["pending"] == 2
+        assert payload["events"]["oldest_pending_age_seconds"] >= 170
+        assert payload["deliveries"]["total"] == 3
         assert payload["deliveries"]["completed"] == 2
         assert payload["deliveries"]["success_rate"] == 50.0
         assert payload["deliveries"]["failure_rate"] == 50.0
+        assert payload["deliveries"]["lag_seconds"] >= 230
         assert payload["deliveries"]["by_status"]["success"] == 1
         assert payload["deliveries"]["by_status"]["dead_letter"] == 1
-        assert payload["outbox"]["total"] == 2
-        assert payload["outbox"]["backlog"] == 2
+        assert payload["deliveries"]["by_status"]["retrying"] == 1
+        assert payload["outbox"]["total"] == 3
+        assert payload["outbox"]["backlog"] == 3
+        assert payload["outbox"]["oldest_backlog_age_seconds"] >= 290
         assert payload["outbox"]["by_status"]["pending"] == 1
+        assert payload["outbox"]["by_status"]["in_progress"] == 1
         assert payload["outbox"]["by_status"]["failed"] == 1
 
 
