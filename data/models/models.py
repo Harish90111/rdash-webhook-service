@@ -219,6 +219,56 @@ class DeliveryAttempt(TimestampedModel):
         return f"{self.event_id}->{self.subscription_id}:{self.status}"
 
 
+class CircuitBreakerStatus(models.TextChoices):
+    """Database values for target-level circuit breaker state."""
+
+    CLOSED = "closed", "Closed"
+    OPEN = "open", "Open"
+    HALF_OPEN = "half_open", "Half open"
+
+
+class CircuitBreakerState(TimestampedModel):
+    """Per-tenant target health state used to short-circuit bad endpoints."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        related_name="circuit_breakers",
+        on_delete=models.CASCADE,
+    )
+    target_url = models.URLField(max_length=2048)
+    state = models.CharField(
+        max_length=16,
+        choices=CircuitBreakerStatus.choices,
+        default=CircuitBreakerStatus.CLOSED,
+    )
+    consecutive_failures = models.PositiveIntegerField(default=0)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    last_failure_at = models.DateTimeField(null=True, blank=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "webhook_circuit_breaker"
+        ordering = ["tenant_id", "target_url"]
+        indexes = [
+            models.Index(fields=["tenant", "state"], name="circuit_tenant_state_idx"),
+            models.Index(fields=["state", "opened_at"], name="circuit_state_opened_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "target_url"],
+                name="uniq_circuit_tenant_target",
+            ),
+            positive_check_constraint(
+                query=Q(consecutive_failures__gte=0),
+                name="circuit_failures_non_negative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.tenant_id}:{self.target_url}:{self.state}"
+
+
 class OutboxStatus(models.TextChoices):
     """Database values for durable broker-publish intent."""
 

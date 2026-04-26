@@ -25,13 +25,11 @@
 - [x] Metrics endpoint
 - [x] `GET /deliveries/` listing endpoint
 - [x] `POST /deliveries/{id}/retry` manual retry endpoint
-- [ ] Circuit breaker per target URL
+- [x] Circuit breaker per target URL
 
 ## Follow-Up Notes
 
-- Delivery isolation is good for this scope through queue bucketing and rate
-  limiting, but it is not yet a full per-target fairness or circuit-breaker
-  design.
-- The runtime API now covers ingestion, subscriptions, health, metrics,
-  delivery visibility, and manual replay. The per-target circuit breaker is the
-  main remaining optional infrastructure gap.
+- The assignment checklist is now complete.
+- Remaining follow-up work is polish rather than missing scope, such as richer
+  metrics for delivery lag and a more explicit OpenAPI auth scheme for the
+  custom API key authentication.

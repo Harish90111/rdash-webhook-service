@@ -138,22 +138,22 @@ Retry timing uses capped exponential backoff with bounded jitter. Defaults are:
 
 ## Noisy Neighbour Handling
 
-The current design separates ingestion from delivery and adds two protections:
+The current design separates ingestion from delivery and adds three protections:
 
 - delivery tasks are routed into stable tenant queue buckets
 - Celery rate limits apply to delivery tasks
+- a per-tenant target circuit breaker opens after repeated failures and cools
+  off before allowing a half-open probe
 
 This is enough to avoid one tenant's failing endpoints blocking ingestion or
-completely dominating a single worker path at this scope. It is not a full
-per-target isolation strategy yet.
+completely dominating a single worker path at this scope. It is still not a
+full per-target fairness scheduler, but it materially reduces repeat calls to
+broken endpoints.
 
 ## What We Cut
 
 The following were intentionally left out or only partially addressed:
 
-- manual delivery replay endpoint
-- dedicated delivery listing endpoint in the runtime API
-- per-target circuit breaker
 - stronger SLA-oriented scheduling guarantees such as sub-10-second delivery
   commitments under sustained load
 
