@@ -8,6 +8,7 @@ from rest_framework.views import exception_handler as drf_exception_handler
 from domain.exceptions import (
     DeliveryAttemptNotFoundError,
     DeliveryFailedError,
+    DeliveryRetryNotAllowedError,
     DuplicateEventError,
     EventNotFoundError,
     SignatureVerificationError,
@@ -21,6 +22,7 @@ DOMAIN_ERROR_STATUS = {
     SubscriptionNotFoundError: status.HTTP_404_NOT_FOUND,
     EventNotFoundError: status.HTTP_404_NOT_FOUND,
     DeliveryAttemptNotFoundError: status.HTTP_404_NOT_FOUND,
+    DeliveryRetryNotAllowedError: status.HTTP_409_CONFLICT,
     DuplicateEventError: status.HTTP_409_CONFLICT,
     DeliveryFailedError: status.HTTP_502_BAD_GATEWAY,
     SignatureVerificationError: status.HTTP_401_UNAUTHORIZED,

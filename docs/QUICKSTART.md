@@ -123,6 +123,13 @@ curl -G http://localhost:8000/api/deliveries/ \
   --data-urlencode "page_size=20"
 ```
 
+## 9. Requeue a failed delivery
+
+```bash
+curl -X POST http://localhost:8000/api/deliveries/DELIVERY_ATTEMPT_ID/retry/ \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
 ## Testing shortcuts
 
 ```bash

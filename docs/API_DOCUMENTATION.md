@@ -316,6 +316,46 @@ Example response:
 }
 ```
 
+### `POST /api/deliveries/{id}/retry/`
+
+Queue an immediate manual retry for a tenant-scoped delivery attempt.
+
+Rules:
+
+- tenant identity comes from the authenticated API key
+- only `failed` and `dead_letter` attempts are retryable
+- the endpoint requeues the existing attempt instead of creating a new one
+
+Example:
+
+```bash
+curl -X POST http://localhost:8000/api/deliveries/0df6a2dc-7966-4d26-8dc4-e20b8c8015ea/retry/ \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+Example response:
+
+```json
+{
+  "data": {
+    "id": "0df6a2dc-7966-4d26-8dc4-e20b8c8015ea",
+    "event_id": "1f33f4de-9f0f-41bc-92a2-0a055665d8f3",
+    "subscription_id": "8b55be17-83d0-4a3a-8a96-6f1d796dca3f",
+    "status": "retrying",
+    "attempt_number": 5,
+    "status_code": 503,
+    "response_body": "upstream unavailable",
+    "error_message": "Webhook endpoint returned HTTP 503.",
+    "next_retry_at": "2026-04-26T13:32:01+00:00",
+    "created_at": "2026-04-26T13:31:02+00:00",
+    "completed_at": null
+  },
+  "meta": {
+    "queued": true
+  }
+}
+```
+
 ## Webhook Delivery Contract
 
 When a subscription matches an ingested event, the outbound webhook request is:
@@ -380,8 +420,21 @@ def verify_webhook(secret: str, headers: dict, body: bytes) -> bool:
 
 ## Delivery and Retry Notes
 
-The service records delivery attempts and exposes tenant-scoped listing through
-`GET /api/deliveries/`. Manual retry is not yet exposed as a runtime endpoint.
+The service records delivery attempts, exposes tenant-scoped listing through
+`GET /api/deliveries/`, and supports immediate manual retry through
+`POST /api/deliveries/{id}/retry/`.
+
+To protect subscribers and workers from repeated failing targets, outbound
+delivery also uses a per-tenant circuit breaker keyed by target URL:
+
+- the breaker opens after `5` consecutive failures by default
+- while open, delivery attempts are short-circuited without making an HTTP call
+- after `60s` by default, one half-open probe is allowed
+- a successful probe closes the breaker and resets the failure count
+- a failed probe reopens it
+
+The breaker delay is folded into retry scheduling so attempts do not burn
+through the retry budget while the target is still cooling down.
 
 Default delivery settings:
 
@@ -391,3 +444,5 @@ Default delivery settings:
 - base retry delay: `1s`
 - max retry delay: `60s`
 - jitter factor: `0.1`
+- circuit breaker failure threshold: `5`
+- circuit breaker recovery timeout: `60s`

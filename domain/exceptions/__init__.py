@@ -54,6 +54,13 @@ class DeliveryAttemptNotFoundError(WebhookDomainError):
     safe_message = "Delivery attempt was not found."
 
 
+class DeliveryRetryNotAllowedError(WebhookDomainError):
+    """Raised when a manual retry is requested for a non-retryable state."""
+
+    error_code = "delivery_retry_not_allowed"
+    safe_message = "Delivery retry is not allowed for this attempt."
+
+
 class DuplicateEventError(WebhookDomainError):
     """Raised when an idempotency key has already been processed."""
 
@@ -78,6 +85,7 @@ class SignatureVerificationError(WebhookDomainError):
 __all__ = [
     "DeliveryAttemptNotFoundError",
     "DeliveryFailedError",
+    "DeliveryRetryNotAllowedError",
     "DuplicateEventError",
     "EventNotFoundError",
     "SignatureVerificationError",

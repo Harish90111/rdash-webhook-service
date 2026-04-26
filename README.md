@@ -12,6 +12,7 @@ tenant-scoped SaaS events such as `po.created`, `invoice.paid`, and
 - fans out one delivery attempt per matched subscription
 - signs outbound webhook requests with HMAC-SHA256
 - retries failed deliveries with exponential backoff and jitter
+- opens a per-tenant circuit breaker for repeatedly failing target URLs
 - exposes health and tenant metrics endpoints
 
 ## Architecture
@@ -136,6 +137,7 @@ Examples below use `X-API-Key`.
 - `GET /api/health/`
 - `GET /api/metrics/`
 - `GET /api/deliveries/`
+- `POST /api/deliveries/{id}/retry/`
 - `POST /api/events/`
 - `GET /api/subscriptions/`
 - `POST /api/subscriptions/`
@@ -238,6 +240,16 @@ The delivery listing is tenant-scoped and supports filtering by:
 - `event_id`
 - `subscription_id`
 
+### 4. Manually requeue a failed delivery
+
+```bash
+curl -X POST http://localhost:8000/api/deliveries/DELIVERY_ATTEMPT_ID/retry/ \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+Manual retry is allowed for delivery attempts in `failed` or `dead_letter`
+state and requeues the existing attempt for immediate processing.
+
 ## Webhook Delivery Contract
 
 Outbound requests are `POST` requests with JSON bodies and these headers:
@@ -291,6 +303,15 @@ By default, delivery uses:
 This means retries use capped exponential backoff with bounded jitter rather
 than retrying every failing target in lock-step.
 
+Circuit breaker defaults:
+
+- failure threshold: `5` consecutive failures
+- recovery timeout: `60s`
+
+When a target keeps failing, the breaker opens for that tenant/target pair and
+short-circuits new delivery attempts until the cooldown window expires. The
+first probe after cooldown runs in half-open mode.
+
 ## Testing
 
 ### Fast domain tests
@@ -325,6 +346,7 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 - `GET /api/health/` for service health
 - `GET /api/metrics/` for tenant-scoped metrics
 - `GET /api/deliveries/` for tenant-scoped delivery visibility
+- `POST /api/deliveries/{id}/retry/` for manual requeue of failed attempts
 
 ## Documentation
 
@@ -334,9 +356,12 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 - [docs/WEBHOOK_INTEGRATION.md](./docs/WEBHOOK_INTEGRATION.md)
 - [docs/ASSIGNMENT_CHECKLIST.md](./docs/ASSIGNMENT_CHECKLIST.md)
 
-## Current Deliberate Cuts
+## Remaining Polish
 
-- no manual retry endpoint yet
-- no per-target circuit breaker yet
+The assignment checklist is now covered end to end in
+[docs/ASSIGNMENT_CHECKLIST.md](./docs/ASSIGNMENT_CHECKLIST.md).
 
-Those are tracked in [docs/ASSIGNMENT_CHECKLIST.md](./docs/ASSIGNMENT_CHECKLIST.md).
+The remaining work is polish rather than a missing feature:
+
+- richer metrics such as delivery lag and oldest pending event age
+- a more explicit OpenAPI security scheme for the custom API key auth

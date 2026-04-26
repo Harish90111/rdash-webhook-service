@@ -24,13 +24,12 @@
 - [x] Django admin for operational inspection
 - [x] Metrics endpoint
 - [x] `GET /deliveries/` listing endpoint
-- [ ] `POST /deliveries/{id}/retry` manual retry endpoint
-- [ ] Circuit breaker per target URL
+- [x] `POST /deliveries/{id}/retry` manual retry endpoint
+- [x] Circuit breaker per target URL
 
 ## Follow-Up Notes
 
-- Delivery isolation is good for this scope through queue bucketing and rate
-  limiting, but it is not yet a full per-target fairness or circuit-breaker
-  design.
-- The runtime API now covers ingestion, subscriptions, health, metrics, and
-  delivery visibility. Manual replay remains a backlog item.
+- The assignment checklist is now complete.
+- Remaining follow-up work is polish rather than missing scope, such as richer
+  metrics for delivery lag and a more explicit OpenAPI auth scheme for the
+  custom API key authentication.

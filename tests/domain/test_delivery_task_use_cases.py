@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from domain.entities import DeliveryAttempt, DeliveryStatus, Subscription, WebhookEvent
-from domain.interfaces import HttpResponse
+from domain.interfaces import CircuitBreakerDecision, HttpResponse
 from domain.services import (
     SIGNATURE_HEADER_NAME,
     SIGNATURE_VERSION,
@@ -133,6 +133,22 @@ class StaticHttpGateway:
         return self.response
 
 
+class RecordingCircuitBreaker:
+    def __init__(self, decision=None):
+        self.decision = decision or CircuitBreakerDecision(allowed=True, state="closed")
+        self.successes = []
+        self.failures = []
+
+    def before_request(self, *, tenant_id, target_url):
+        return self.decision
+
+    def record_success(self, *, tenant_id, target_url):
+        self.successes.append((tenant_id, target_url))
+
+    def record_failure(self, *, tenant_id, target_url):
+        self.failures.append((tenant_id, target_url))
+
+
 def test_tenant_queue_name_is_stable_and_bucketed():
     assert tenant_queue_name("tenant-1", buckets=4) == tenant_queue_name("tenant-1", buckets=4)
     assert tenant_queue_name("tenant-1", buckets=4).startswith("webhooks.delivery.tenant-")
@@ -200,6 +216,7 @@ def test_deliver_webhook_marks_success_and_sends_signature_headers():
     attempts = MemoryDeliveryAttemptRepository()
     attempt = attempts.create(DeliveryAttempt(id="attempt-1", event_id=event.id, subscription_id=subscription.id), "tenant-1")
     gateway = StaticHttpGateway(HttpResponse(status_code=204, body="ok"))
+    breaker = RecordingCircuitBreaker()
 
     result = DeliverWebhook(
         event_repository=MemoryEventRepository([event]),
@@ -207,6 +224,7 @@ def test_deliver_webhook_marks_success_and_sends_signature_headers():
         delivery_attempt_repository=attempts,
         http_gateway=gateway,
         enqueue_retry=lambda attempt, tenant_id, countdown: None,
+        circuit_breaker=breaker,
         max_retries=3,
         base_retry_delay=1,
         max_retry_delay=60,
@@ -224,6 +242,8 @@ def test_deliver_webhook_marks_success_and_sends_signature_headers():
         gateway.requests[0].body,
         gateway.requests[0].headers,
     ) is True
+    assert breaker.successes == [("tenant-1", "https://a.test/webhook")]
+    assert breaker.failures == []
 
 
 def test_deliver_webhook_skips_already_in_progress_attempt():
@@ -304,6 +324,7 @@ def test_deliver_webhook_schedules_retry_for_failed_response():
     attempts = MemoryDeliveryAttemptRepository()
     attempt = attempts.create(DeliveryAttempt(id="attempt-1", event_id=event.id, subscription_id=subscription.id), "tenant-1")
     retries = []
+    breaker = RecordingCircuitBreaker()
 
     result = DeliverWebhook(
         event_repository=MemoryEventRepository([event]),
@@ -311,6 +332,7 @@ def test_deliver_webhook_schedules_retry_for_failed_response():
         delivery_attempt_repository=attempts,
         http_gateway=StaticHttpGateway(HttpResponse(status_code=503, body="unavailable")),
         enqueue_retry=lambda attempt, tenant_id, countdown: retries.append((attempt.id, tenant_id, countdown)),
+        circuit_breaker=breaker,
         max_retries=3,
         base_retry_delay=1,
         max_retry_delay=60,
@@ -322,6 +344,51 @@ def test_deliver_webhook_schedules_retry_for_failed_response():
     assert result.status == DeliveryStatus.RETRYING
     assert result.attempt_number == 2
     assert retries
+    assert breaker.failures == [("tenant-1", "https://a.test/webhook")]
+
+
+def test_deliver_webhook_short_circuits_when_circuit_breaker_is_open():
+    event = WebhookEvent(id="event-1", tenant_id="tenant-1", event_type="po.created")
+    subscription = Subscription(
+        id="sub-1",
+        tenant_id="tenant-1",
+        event_type="po.*",
+        target_url="https://a.test/webhook",
+        secret="secret",
+    )
+    attempts = MemoryDeliveryAttemptRepository()
+    attempt = attempts.create(
+        DeliveryAttempt(id="attempt-1", event_id=event.id, subscription_id=subscription.id),
+        "tenant-1",
+    )
+    gateway = StaticHttpGateway(HttpResponse(status_code=204, body="ok"))
+    retries = []
+    breaker = RecordingCircuitBreaker(
+        CircuitBreakerDecision(
+            allowed=False,
+            state="open",
+            retry_after_seconds=30.0,
+        )
+    )
+
+    result = DeliverWebhook(
+        event_repository=MemoryEventRepository([event]),
+        subscription_repository=MemorySubscriptionRepository([subscription]),
+        delivery_attempt_repository=attempts,
+        http_gateway=gateway,
+        enqueue_retry=lambda attempt, tenant_id, countdown: retries.append((attempt.id, tenant_id, countdown)),
+        circuit_breaker=breaker,
+        max_retries=3,
+        base_retry_delay=1,
+        max_retry_delay=60,
+        retry_jitter=0,
+        connect_timeout=5,
+        read_timeout=15,
+    )(attempt_id=attempt.id, tenant_id="tenant-1")
+
+    assert result.status == DeliveryStatus.RETRYING
+    assert gateway.requests == []
+    assert retries[0][2] >= 30.0
 
 
 def test_deliver_webhook_dead_letters_after_retry_budget_is_exhausted():
