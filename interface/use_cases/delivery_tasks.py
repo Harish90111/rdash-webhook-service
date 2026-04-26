@@ -225,8 +225,8 @@ class DeliverWebhook:
     ):
         headers = {
             "Content-Type": "application/json",
-            "X-Webhook-Event": event_id,
-            "X-Webhook-Event-Type": event_type,
+            "X-Event-Id": event_id,
+            "X-Event-Type": event_type,
         }
         headers.update(build_signature_headers(signing_secret, timestamp, body))
         return headers

@@ -9,7 +9,7 @@ SIGNATURE_PREFIX = "sha256="
 SIGNATURE_VERSION = "v1"
 SIGNATURE_HEADER_NAME = "X-Signature"
 SIGNATURE_VERSION_HEADER_NAME = "X-Signature-Version"
-TIMESTAMP_HEADER_NAME = "X-Webhook-Timestamp"
+TIMESTAMP_HEADER_NAME = "X-Timestamp"
 
 
 def generate_signature(secret: str, timestamp: str, body: Union[str, bytes]) -> str:

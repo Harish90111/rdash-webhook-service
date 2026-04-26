@@ -1,303 +1,129 @@
-# Quick Start Guide
+# Quick Start
 
-Get the Webhook Delivery Service running and making API calls in 5 minutes.
+Get the service running locally and make your first authenticated API calls.
 
-## Prerequisites
+## 1. Install and bootstrap
 
-- Python 3.9+
-- PostgreSQL or SQLite (for local dev)
-- curl or Postman for testing
+### Windows PowerShell
 
-## 1. Install & Configure (2 minutes)
-
-```bash
-# Clone repo
-git clone <repo-url>
-cd rdash-webhook-service
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# or .venv\Scripts\activate  # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Setup environment
-cp .env.example .env
-# For local dev with SQLite, set: USE_SQLITE=True
+```powershell
+.\bin\setup.ps1 -Action Bootstrap -UseSqlite
 ```
 
-## 2. Run the Server (1 minute)
+### Manual setup
 
 ```bash
-# Terminal 1: Django server
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 python manage.py migrate
-python manage.py runserver
+python manage.py check
+```
 
-# Terminal 2: Celery worker (optional, for async delivery)
+For lightweight local development, add this to `.env`:
+
+```env
+USE_SQLITE=True
+```
+
+## 2. Run the app
+
+Terminal 1:
+
+```bash
+python manage.py runserver
+```
+
+Terminal 2:
+
+```bash
 celery -A config worker -l info
 ```
 
-Server running at: **http://localhost:8000**
+Terminal 3:
 
-## 3. Explore API Docs (1 minute)
-
-Open browser:
-- **Swagger UI**: http://localhost:8000/api/docs/
-- **ReDoc**: http://localhost:8000/api/redoc/
-
-## 4. Make Your First API Call (1 minute)
-
-### Get API Key
-
-For local testing, use dummy key:
 ```bash
-API_KEY="local-test-key-12345"
+celery -A config beat -l info
 ```
 
-### Create a Subscription
+## 3. Bootstrap a tenant
+
+Create an admin user:
+
+```bash
+python manage.py createsuperuser
+```
+
+Open <http://localhost:8000/admin/> and:
+
+1. create a `Tenant`
+2. create a tenant API key for that tenant
+
+Or issue the API key from the command line:
+
+```bash
+python manage.py create_api_key --tenant-id <tenant-uuid> --name "local-dev"
+```
+
+The raw key is shown once.
+
+## 4. Explore the docs
+
+- Swagger UI: <http://localhost:8000/api/docs/>
+- ReDoc: <http://localhost:8000/api/redoc/>
+- Schema: <http://localhost:8000/api/schema/>
+
+## 5. Create a subscription
 
 ```bash
 curl -X POST http://localhost:8000/api/subscriptions/ \
-  -H "Authorization: ApiKey ${API_KEY}" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "event_type": "order.created",
-    "target_url": "https://webhook.site/unique-id",
+    "event_type": "po.*",
+    "target_url": "https://webhook.site/your-id",
     "active": true
   }'
 ```
 
-**Response:**
-```json
-{
-  "id": "sub_abc123",
-  "event_type": "order.created",
-  "target_url": "https://webhook.site/unique-id",
-  "active": true,
-  "secret": "whsec_xyz789...",
-  "created_at": "2024-04-26T10:00:00Z"
-}
-```
-
-⚠️ **Save the secret!** It's returned only once.
-
-### Send an Event
+## 6. Send an event
 
 ```bash
 curl -X POST http://localhost:8000/api/events/ \
-  -H "Authorization: ApiKey ${API_KEY}" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "event_type": "order.created",
+    "event_type": "po.created",
     "payload": {
-      "order_id": "12345",
-      "amount": 99.99
-    }
+      "po_number": "PO-1001",
+      "amount": 4200
+    },
+    "idempotency_key": "po-1001-created"
   }'
 ```
 
-**Response:**
-```json
-{
-  "id": "evt_def456",
-  "event_type": "order.created",
-  "payload": {
-    "order_id": "12345",
-    "amount": 99.99
-  },
-  "created_at": "2024-04-26T10:05:00Z"
-}
-```
+If the same idempotency key is replayed for the same tenant, the service
+returns the existing event instead of creating a duplicate.
 
-### Check Delivery Status
+## 7. Check service health and metrics
 
 ```bash
-# Get all delivery attempts
-curl -H "Authorization: ApiKey ${API_KEY}" \
-  http://localhost:8000/api/delivery-attempts/
+curl http://localhost:8000/api/health/
+curl -H "X-API-Key: YOUR_API_KEY" http://localhost:8000/api/metrics/
 ```
 
----
-
-## Common Tasks
-
-### Test Webhook Locally
-
-Use [webhook.site](https://webhook.site):
-
-1. Go to https://webhook.site
-2. Copy unique URL
-3. Create subscription with that URL:
-   ```bash
-   curl -X POST http://localhost:8000/api/subscriptions/ \
-     -H "Authorization: ApiKey ${API_KEY}" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "event_type": "test.*",
-       "target_url": "https://webhook.site/YOUR-UNIQUE-ID"
-     }'
-   ```
-4. Send event, watch it appear in webhook.site UI
-
-### Use Postman
-
-1. Export schema: `python manage.py spectacular --file schema.json`
-2. Open Postman → Import → Select `schema.json`
-3. Click "Authorize" button, paste API key
-4. Make requests from collection
-
-### Run Tests
+## Testing shortcuts
 
 ```bash
-pytest                              # All tests
-pytest tests/domain/                # Unit tests only
-pytest -v                           # Verbose
-pytest --cov=.                      # With coverage
+pytest tests/domain -q
+pytest tests/integration -q
+pytest tests/e2e -q
 ```
 
-### Create Admin User
+## Where to look next
 
-```bash
-python manage.py createsuperuser
-# Then visit http://localhost:8000/admin/
-```
-
----
-
-## Project Structure at a Glance
-
-```
-rdash-webhook-service/
-├── README.md                    # Full setup guide
-├── docs/
-│   ├── API_DOCUMENTATION.md     # Complete API reference
-│   ├── SWAGGER_SETUP.md         # Swagger/OpenAPI details
-│   └── WEBHOOK_INTEGRATION.md   # How to receive webhooks
-├── config/
-│   ├── settings.py              # Django config
-│   ├── urls.py                  # API routes
-│   └── celery.py                # Celery config
-├── domain/                      # Pure Python business logic
-│   ├── entities/                # Data models
-│   ├── services/                # Services (retry, signing, etc.)
-│   └── interfaces/              # Abstract interfaces
-├── interface/                   # Django views & serializers
-├── data/                        # Database & HTTP implementations
-└── tests/                       # Test suite
-```
-
-## Key Concepts
-
-### Event Type Matching
-
-Subscriptions support **wildcard patterns**:
-- `order.created` - Exact match only
-- `order.*` - Matches `order.created`, `order.updated`, etc.
-- `*.created` - Matches any `.created` event
-
-### Webhook Delivery
-
-1. Event ingested → stored immediately
-2. Celery worker matches subscriptions
-3. One delivery task per subscription
-4. Automatic retries on failure (up to 7 times)
-5. Response must be 2xx within 30 seconds
-
-### Security
-
-- **API Key Auth**: Required header `Authorization: ApiKey YOUR_KEY`
-- **Signatures**: Outgoing webhooks signed with HMAC-SHA256
-- **Secrets**: One-time display, stored hashed
-
----
-
-## API Endpoints Summary
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `POST` | `/api/subscriptions/` | Create subscription |
-| `GET` | `/api/subscriptions/` | List subscriptions |
-| `GET` | `/api/subscriptions/{id}/` | Get one subscription |
-| `PATCH` | `/api/subscriptions/{id}/` | Update subscription |
-| `DELETE` | `/api/subscriptions/{id}/` | Delete subscription |
-| `POST` | `/api/events/` | Ingest event |
-| `GET` | `/api/events/` | List events |
-| `GET` | `/api/delivery-attempts/` | Check delivery status |
-
----
-
-## Troubleshooting
-
-**"Connection refused" - Is server running?**
-```bash
-# Check if port 8000 is listening
-lsof -i :8000  # macOS/Linux
-netstat -ano | findstr :8000  # Windows
-```
-
-**"No module named 'rest_framework'"**
-```bash
-pip install -r requirements.txt
-```
-
-**Database errors?**
-```bash
-python manage.py migrate
-```
-
-**Tests failing?**
-```bash
-pytest --tb=short -v  # Detailed output
-```
-
----
-
-## Next Steps
-
-1. **Read Full Docs**: [README.md](../README.md)
-2. **Explore API**: http://localhost:8000/api/docs/
-3. **Test Webhooks**: [WEBHOOK_INTEGRATION.md](./WEBHOOK_INTEGRATION.md)
-4. **Configure Swagger**: [SWAGGER_SETUP.md](./SWAGGER_SETUP.md)
-5. **Check API Reference**: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
-
----
-
-## Quick Reference Commands
-
-```bash
-# Start server
-python manage.py runserver
-
-# Start worker
-celery -A config worker -l info
-
-# Run migrations
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Open shell
-python manage.py shell
-
-# Run tests
-pytest
-
-# Generate schema
-python manage.py spectacular --file schema.json
-
-# Format code
-black .
-
-# Lint
-flake8 .
-
-# Check coverage
-pytest --cov=.
-```
-
----
-
-Need help? Check the full [README.md](../README.md) or [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+- [README.md](../README.md)
+- [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+- [WEBHOOK_INTEGRATION.md](./WEBHOOK_INTEGRATION.md)
+- [DESIGN.md](../DESIGN.md)
