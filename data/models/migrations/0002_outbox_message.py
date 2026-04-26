@@ -1,10 +1,22 @@
 """Add durable outbox messages for reliable broker publishing."""
 
+import inspect
 import django.db.models.deletion
 import django.utils.timezone
 import uuid
 from django.db import migrations, models
 from django.db.models import Q
+
+
+CHECK_CONSTRAINT_ARGUMENT = (
+    "condition"
+    if "condition" in inspect.signature(models.CheckConstraint.__init__).parameters
+    else "check"
+)
+
+
+def positive_check_constraint(*, query: Q, name: str) -> models.CheckConstraint:
+    return models.CheckConstraint(name=name, **{CHECK_CONSTRAINT_ARGUMENT: query})
 
 
 class Migration(migrations.Migration):
@@ -84,8 +96,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="outboxmessage",
-            constraint=models.CheckConstraint(
-                check=Q(("attempts__gte", 0)),
+            constraint=positive_check_constraint(
+                query=Q(("attempts__gte", 0)),
                 name="outbox_attempts_non_negative",
             ),
         ),

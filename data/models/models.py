@@ -1,10 +1,24 @@
 """Django ORM models for the webhook delivery service."""
 
+import inspect
 import uuid
 
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+
+
+CHECK_CONSTRAINT_ARGUMENT = (
+    "condition"
+    if "condition" in inspect.signature(models.CheckConstraint.__init__).parameters
+    else "check"
+)
+
+
+def positive_check_constraint(*, query: Q, name: str) -> models.CheckConstraint:
+    """Build a CheckConstraint compatible with supported Django versions."""
+
+    return models.CheckConstraint(name=name, **{CHECK_CONSTRAINT_ARGUMENT: query})
 
 
 class TimestampedModel(models.Model):
@@ -195,8 +209,8 @@ class DeliveryAttempt(TimestampedModel):
                 fields=["event", "subscription"],
                 name="uniq_delivery_event_subscription",
             ),
-            models.CheckConstraint(
-                check=Q(attempt_number__gte=1),
+            positive_check_constraint(
+                query=Q(attempt_number__gte=1),
                 name="delivery_attempt_number_positive",
             ),
         ]
@@ -261,8 +275,8 @@ class OutboxMessage(TimestampedModel):
                 fields=["event", "task_name"],
                 name="uniq_outbox_event_task",
             ),
-            models.CheckConstraint(
-                check=Q(attempts__gte=0),
+            positive_check_constraint(
+                query=Q(attempts__gte=0),
                 name="outbox_attempts_non_negative",
             ),
         ]

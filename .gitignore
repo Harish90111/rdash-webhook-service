@@ -24,6 +24,7 @@ logs/
 *.pid
 *.pid.lock
 celerybeat-schedule
+celerybeat-schedule-*
 celery_beat.db
 dump.rdb
 *.sock
