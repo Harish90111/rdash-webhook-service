@@ -4,6 +4,7 @@ import uuid
 
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 
 class TimestampedModel(models.Model):
@@ -201,3 +202,69 @@ class DeliveryAttempt(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.event_id}->{self.subscription_id}:{self.status}"
+
+
+class OutboxStatus(models.TextChoices):
+    """Database values for durable broker-publish intent."""
+
+    PENDING = "pending", "Pending"
+    IN_PROGRESS = "in_progress", "In progress"
+    PUBLISHED = "published", "Published"
+    FAILED = "failed", "Failed"
+
+
+class OutboxMessage(TimestampedModel):
+    """
+    Durable task intent written in the same transaction as a webhook event.
+
+    A separate dispatcher can later publish pending rows to Celery. This keeps
+    event ingestion reliable when Redis or workers are temporarily unavailable.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        related_name="outbox_messages",
+        on_delete=models.CASCADE,
+    )
+    event = models.ForeignKey(
+        WebhookEvent,
+        related_name="outbox_messages",
+        on_delete=models.CASCADE,
+    )
+    task_name = models.CharField(max_length=255)
+    queue_name = models.CharField(max_length=120, blank=True)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(
+        max_length=32,
+        choices=OutboxStatus.choices,
+        default=OutboxStatus.PENDING,
+    )
+    attempts = models.PositiveIntegerField(default=0)
+    available_at = models.DateTimeField(default=timezone.now)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    locked_by = models.CharField(max_length=255, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "webhook_outbox_message"
+        ordering = ["available_at", "created_at"]
+        indexes = [
+            models.Index(fields=["status", "available_at"], name="outbox_status_available_idx"),
+            models.Index(fields=["tenant", "status"], name="outbox_tenant_status_idx"),
+            models.Index(fields=["event", "task_name"], name="outbox_event_task_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event", "task_name"],
+                name="uniq_outbox_event_task",
+            ),
+            models.CheckConstraint(
+                check=Q(attempts__gte=0),
+                name="outbox_attempts_non_negative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.event_id}:{self.task_name}:{self.status}"
