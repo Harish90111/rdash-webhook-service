@@ -67,6 +67,15 @@ class DeliveryAttemptRepository(Protocol):
     def get_by_id(self, attempt_id: str, tenant_id: str) -> DeliveryAttempt:
         ...
 
+    def claim_for_delivery(self, attempt_id: str, tenant_id: str) -> Optional[DeliveryAttempt]:
+        """
+        Atomically claim a delivery attempt for worker execution.
+
+        Returns None when the attempt is already terminal, already in progress,
+        or waiting for a future retry window.
+        """
+        ...
+
     def find_by_event_and_subscription(
         self,
         event_id: str,

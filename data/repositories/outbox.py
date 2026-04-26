@@ -1,9 +1,11 @@
 """Django outbox repository and atomic event persistence helper."""
 
+from datetime import timedelta
 from typing import Mapping, Optional, Sequence
 
 from django.db import IntegrityError, transaction
 from django.db.models import F
+from django.db.models import Q
 from django.utils import timezone
 
 from data.models.models import OutboxMessage, OutboxStatus
@@ -71,12 +73,19 @@ class DjangoOutboxRepository:
         *,
         locked_by: str,
         limit: int = 100,
+        stale_after_seconds: int = 300,
     ) -> Sequence[OutboxMessage]:
         now = timezone.now()
+        eligible_filter = Q(status=OutboxStatus.PENDING, available_at__lte=now)
+        if stale_after_seconds > 0:
+            eligible_filter |= Q(
+                status=OutboxStatus.IN_PROGRESS,
+                locked_at__lte=now - timedelta(seconds=stale_after_seconds),
+            )
         with transaction.atomic():
             queryset = (
                 OutboxMessage.objects.select_for_update(skip_locked=True)
-                .filter(status=OutboxStatus.PENDING, available_at__lte=now)
+                .filter(eligible_filter)
                 .order_by("available_at", "created_at")[:limit]
             )
             messages = list(queryset)
@@ -100,6 +109,29 @@ class DjangoOutboxRepository:
             locked_at=None,
             locked_by="",
             last_error="",
+        )
+        if updated_count == 0:
+            raise OutboxMessageNotFoundError(
+                context={"message_id": message_id, "tenant_id": tenant_id}
+            )
+
+    def release_for_retry(
+        self,
+        message_id: str,
+        tenant_id: str,
+        error_message: str,
+        *,
+        available_at=None,
+    ) -> None:
+        updated_count = OutboxMessage.objects.filter(
+            id=message_id,
+            tenant_id=tenant_id,
+        ).update(
+            status=OutboxStatus.PENDING,
+            available_at=available_at or timezone.now(),
+            locked_at=None,
+            locked_by="",
+            last_error=error_message[:2000],
         )
         if updated_count == 0:
             raise OutboxMessageNotFoundError(

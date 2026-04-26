@@ -3,6 +3,8 @@
 from typing import Optional, Sequence
 
 from django.db import IntegrityError
+from django.db.models import Q
+from django.utils import timezone
 
 from data.models.models import DeliveryAttempt as DeliveryAttemptModel
 from data.models.models import Subscription as SubscriptionModel
@@ -48,6 +50,34 @@ class DjangoDeliveryAttemptRepository:
 
     def get_by_id(self, attempt_id: str, tenant_id: str) -> DeliveryAttempt:
         return self._to_domain(self._get_model(attempt_id, tenant_id))
+
+    def claim_for_delivery(self, attempt_id: str, tenant_id: str) -> Optional[DeliveryAttempt]:
+        """
+        Atomically move a ready attempt into progress.
+
+        This prevents duplicate Celery messages for the same attempt from
+        delivering twice when fan-out is replayed after a worker crash.
+        """
+        now = timezone.now()
+        updated_count = (
+            self._tenant_scoped_queryset(tenant_id)
+            .filter(id=attempt_id)
+            .filter(
+                Q(status__in=[DeliveryStatus.PENDING.value, DeliveryStatus.FAILED.value])
+                | Q(status=DeliveryStatus.RETRYING.value, next_retry_at__isnull=True)
+                | Q(status=DeliveryStatus.RETRYING.value, next_retry_at__lte=now)
+            )
+            .update(
+                status=DeliveryStatus.IN_PROGRESS.value,
+                next_retry_at=None,
+                completed_at=None,
+                updated_at=now,
+            )
+        )
+        if updated_count == 0:
+            self._get_model(attempt_id, tenant_id)
+            return None
+        return self.get_by_id(attempt_id, tenant_id)
 
     def find_by_event_and_subscription(
         self,

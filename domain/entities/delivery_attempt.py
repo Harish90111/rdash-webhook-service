@@ -74,6 +74,7 @@ class DeliveryAttempt:
     def mark_in_progress(self) -> None:
         """Mark this attempt as in progress."""
         self.status = DeliveryStatus.IN_PROGRESS
+        self.next_retry_at = None
         self.completed_at = None
     
     def mark_success(self, status_code: int, response_body: Optional[str] = None) -> None:
