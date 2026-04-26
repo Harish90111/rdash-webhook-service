@@ -191,9 +191,6 @@ if HAS_DRF_SPECTACULAR:
         ] if DEBUG else [
             {'url': 'https://api.example.com', 'description': 'Production'},
         ],
-        'PREPROCESSING_HOOKS': [
-            'drf_spectacular.openapi.AutoSchema.get_schema',
-        ],
         'SCHEMA_PATH_PREFIX': '/api/',
         'COMPONENT_SPLIT_REQUEST': True,
         'SORT_OPERATIONS_BY_NAME': True,

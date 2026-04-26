@@ -167,11 +167,11 @@ class WebhookDeliveryFlowE2ETests(TestCase):
         assert len(gateway.requests) == 1
         assert retry_enqueue.call_count == 0
         assert request.url == "https://example.test/acme"
-        assert request.headers["X-Webhook-Event"] == event_id
-        assert request.headers["X-Webhook-Event-Type"] == "po.created"
+        assert request.headers["X-Event-Id"] == event_id
+        assert request.headers["X-Event-Type"] == "po.created"
         assert request.headers["X-Signature-Version"] == "v1"
         assert "X-Signature" in request.headers
-        assert "X-Webhook-Timestamp" in request.headers
+        assert "X-Timestamp" in request.headers
         assert delivered_body["event_type"] == "po.created"
         assert delivered_body["tenant_id"] == str(tenant.id)
 
