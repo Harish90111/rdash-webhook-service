@@ -1,0 +1,1 @@
+# Domain layer - Pure Python, zero framework dependencies

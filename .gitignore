@@ -1,0 +1,74 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# Environment files and secrets
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+!.env.example
+
+# Logs and runtime files
+logs/
+*.log
+*.pid
+*.pid.lock
+celerybeat-schedule
+celerybeat-schedule-*
+celery_beat.db
+dump.rdb
+*.sock
+
+# Local databases
+db.sqlite3
+db.sqlite3-journal
+*.sqlite
+*.sqlite3
+*.db
+
+# Test, coverage, and type-checker outputs
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+dmypy.json
+.dmypy.json
+
+# Build and packaging outputs
+build/
+dist/
+*.egg-info/
+*.egg
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local overrides
+local_settings.py
+local_*.py
+test_local*.py
