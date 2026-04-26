@@ -236,13 +236,15 @@ Example response:
     "events": {
       "received": 5,
       "processed": 5,
-      "pending": 0
+      "pending": 0,
+      "oldest_pending_age_seconds": 0.0
     },
     "deliveries": {
       "total": 5,
       "completed": 5,
       "success_rate": 100.0,
       "failure_rate": 0.0,
+      "lag_seconds": 0.0,
       "by_status": {
         "success": 5,
         "dead_letter": 0,
@@ -252,6 +254,7 @@ Example response:
     "outbox": {
       "total": 5,
       "backlog": 0,
+      "oldest_backlog_age_seconds": 0.0,
       "by_status": {
         "published": 5
       }
@@ -259,6 +262,12 @@ Example response:
   }
 }
 ```
+
+Additional metric notes:
+
+- `events.oldest_pending_age_seconds` is the age of the oldest unprocessed event
+- `deliveries.lag_seconds` is the age of the oldest non-terminal delivery attempt
+- `outbox.oldest_backlog_age_seconds` is the age of the oldest unpublished outbox item
 
 ## Deliveries
 

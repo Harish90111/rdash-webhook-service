@@ -17,5 +17,9 @@ class APIDocumentationTests(TestCase):
 
         assert schema_response.status_code == 200
         assert docs_response.status_code == 200
-        assert "openapi" in schema_response.content.decode("utf-8")
-        assert "SwaggerUIBundle" in docs_response.content.decode("utf-8")
+        schema_body = schema_response.content.decode("utf-8")
+        docs_body = docs_response.content.decode("utf-8")
+        assert "openapi" in schema_body
+        assert "TenantApiKeyAuth" in schema_body
+        assert "X-API-Key" in schema_body
+        assert "SwaggerUIBundle" in docs_body

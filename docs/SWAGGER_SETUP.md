@@ -47,15 +47,14 @@ The runtime API itself accepts either:
 - `X-API-Key: <raw-key>`
 - `Authorization: Api-Key <raw-key>`
 
-Swagger documents the endpoints, but the project does not currently ship a
-custom `drf-spectacular` authentication extension for the tenant API key class.
-That means the schema view may not render a polished "Authorize" workflow for
-the custom auth scheme in every environment.
+The project now ships a `drf-spectacular` authentication extension for the
+custom tenant API key class. In the generated schema, the auth scheme appears
+as `TenantApiKeyAuth` and uses the preferred `X-API-Key` header.
 
 For interactive testing today, use one of these paths:
 
-1. open the docs for request and response shapes
-2. use `curl`, Postman, or another HTTP client with `X-API-Key`
+1. use the schema/docs UI with `X-API-Key`
+2. use `curl`, Postman, or another HTTP client
 
 Example:
 
