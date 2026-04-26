@@ -5,8 +5,11 @@ from interface.serializers.subscriptions import (
     SubscriptionPatchSerializer,
     SubscriptionResponseSerializer,
 )
+from interface.serializers.events import EventIngestSerializer, EventResponseSerializer
 
 __all__ = [
+    "EventIngestSerializer",
+    "EventResponseSerializer",
     "SubscriptionCreateSerializer",
     "SubscriptionPatchSerializer",
     "SubscriptionResponseSerializer",

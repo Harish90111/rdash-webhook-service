@@ -1,5 +1,6 @@
 """Application use cases used by interface adapters."""
 
+from interface.use_cases.events import IngestEvent
 from interface.use_cases.subscriptions import (
     CreateSubscription,
     DeleteSubscription,
@@ -12,6 +13,7 @@ __all__ = [
     "CreateSubscription",
     "DeleteSubscription",
     "GetSubscription",
+    "IngestEvent",
     "ListSubscriptions",
     "PatchSubscription",
 ]
