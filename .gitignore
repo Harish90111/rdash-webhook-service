@@ -1,0 +1,145 @@
+# Django-specific
+*.pyc
+__pycache__/
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.Python
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.virtualenv
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.vim/
+.emacs.d/
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
+# Logs and temporary files
+logs/
+*.log
+*.pot
+*.pid
+tmp/
+temp/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# Celery
+celerybeat-schedule
+celery_beat.db
+
+# Database and migrations (except initial)
+*.db
+*.sqlite
+db/
+data/migrations/__pycache__/
+
+# Node/npm (if frontend tools are used)
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+package-lock.json
+
+# OS-specific
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Docker-related (dev containers, but not compose file)
+.dockerignore
+docker-compose.override.yml
+
+# IDE caches
+.python-version
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# Secrets and credentials (never commit these)
+.aws/
+.ssh/
+credentials.json
+secrets.json
+api_keys.txt
+
+# Redis and broker files
+dump.rdb
+*.sock
+
+# Any local development files
+local_*.py
+test_local*.py
+
+# Mac OS
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+ehthumbs.db
+Desktop.ini
+
+# Poetry
+poetry.lock
+
+# Pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# VS Code specific
+.vscode/extensions/
+.vscode/launch.json
+.vscode/settings.json
+
+# Django migrations in dev (keep initial)
+data/migrations/[0-9]*.py
+data/migrations/[0-9]*.pyc
+
+# Pycache in migrations
+data/migrations/__pycache__/
+
+# Large data files
+*.csv
+*.xlsx
+*.xls
+*.sql
+*.bak
+
+# Media and static files (if generated)
+/media/
+/staticfiles/
+/static/collected/
