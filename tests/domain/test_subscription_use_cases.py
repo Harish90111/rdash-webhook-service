@@ -1,9 +1,5 @@
 from domain.entities import Subscription
-from interface.use_cases.subscriptions import (
-    CreateSubscription,
-    PatchSubscription,
-    hash_subscription_secret,
-)
+from interface.use_cases.subscriptions import CreateSubscription, PatchSubscription
 
 
 class MemorySubscriptionRepository:
@@ -31,7 +27,7 @@ class MemorySubscriptionRepository:
         del self.subscriptions[(tenant_id, subscription_id)]
 
 
-def test_create_subscription_hashes_secret_for_persistence():
+def test_create_subscription_returns_raw_secret_for_one_time_display():
     repository = MemorySubscriptionRepository()
     result = CreateSubscription(repository)(
         tenant_id="tenant-1",
@@ -40,8 +36,7 @@ def test_create_subscription_hashes_secret_for_persistence():
     )
 
     assert result.secret
-    assert result.subscription.secret == hash_subscription_secret(result.secret)
-    assert result.subscription.secret != result.secret
+    assert result.subscription.secret == result.secret
 
 
 def test_patch_subscription_updates_allowed_fields():

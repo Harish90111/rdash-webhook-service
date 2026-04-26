@@ -1,6 +1,5 @@
 """Subscription management use cases."""
 
-import hashlib
 import secrets
 from dataclasses import dataclass
 from typing import Mapping, Sequence
@@ -24,12 +23,6 @@ def generate_subscription_secret() -> str:
     """Generate a URL-safe subscription signing secret."""
     return secrets.token_urlsafe(SECRET_BYTES)
 
-
-def hash_subscription_secret(secret: str) -> str:
-    """Hash a subscription secret before persistence."""
-    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
-
-
 class CreateSubscription:
     def __init__(self, repository: SubscriptionRepository):
         self.repository = repository
@@ -41,7 +34,7 @@ class CreateSubscription:
             event_type=event_type,
             target_url=target_url,
             active=active,
-            secret=hash_subscription_secret(raw_secret),
+            secret=raw_secret,
         )
         persisted = self.repository.create(subscription)
         return CreateSubscriptionResult(subscription=persisted, secret=raw_secret)

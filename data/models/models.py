@@ -89,6 +89,7 @@ class Subscription(TimestampedModel):
     target_url = models.URLField(max_length=2048)
     active = models.BooleanField(default=True)
     secret_hash = models.CharField(max_length=128)
+    secret_encrypted = models.TextField(blank=True, default="")
 
     class Meta:
         db_table = "webhook_subscription"

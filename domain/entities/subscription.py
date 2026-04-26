@@ -22,7 +22,7 @@ class Subscription:
         event_type: Event type pattern (supports wildcards like 'po.*')
         target_url: Destination URL for webhook delivery
         active: Whether the subscription is active
-        secret: Secret for HMAC signing (should be stored hashed)
+        secret: Secret for HMAC signing (stored encrypted at rest)
         created_at: Timestamp when created
         updated_at: Timestamp when last updated
     """
