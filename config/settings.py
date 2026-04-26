@@ -7,6 +7,7 @@ Clean Architecture structure:
 - data/       : Infrastructure implementations (models, repositories, gateways)
 """
 
+from importlib.util import find_spec
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -55,6 +56,8 @@ validate_runtime_settings(
 # APPLICATION DEFINITION
 # =============================================================================
 
+HAS_DRF_SPECTACULAR = find_spec("drf_spectacular") is not None
+
 INSTALLED_APPS = [
     # Django built-in apps
     'django.contrib.admin',
@@ -71,6 +74,8 @@ INSTALLED_APPS = [
     'data.models.apps.DataModelsConfig',
     'interface.apps.InterfaceConfig',
 ]
+if HAS_DRF_SPECTACULAR:
+    INSTALLED_APPS.append('drf_spectacular')
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -158,6 +163,41 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+if HAS_DRF_SPECTACULAR:
+    REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
+
+# =============================================================================
+# SPECTACULAR SETTINGS (OpenAPI/Swagger)
+# =============================================================================
+
+if HAS_DRF_SPECTACULAR:
+    SPECTACULAR_SETTINGS = {
+        'TITLE': 'Webhook Delivery Service API',
+        'DESCRIPTION': 'Event-driven webhook delivery service with subscription management and reliable fan-out delivery.',
+        'VERSION': '1.0.0',
+        'SERVE_PERMISSIONS': [
+            'rest_framework.permissions.AllowAny',  # Allow unauthenticated access to schema
+        ],
+        'CONTACT': {
+            'name': 'Development Team',
+            'email': 'support@example.com',
+        },
+        'LICENSE': {
+            'name': 'Proprietary',
+        },
+        'SERVERS': [
+            {'url': 'http://localhost:8000', 'description': 'Development'},
+            {'url': 'https://api.example.com', 'description': 'Production'},
+        ] if DEBUG else [
+            {'url': 'https://api.example.com', 'description': 'Production'},
+        ],
+        'PREPROCESSING_HOOKS': [
+            'drf_spectacular.openapi.AutoSchema.get_schema',
+        ],
+        'SCHEMA_PATH_PREFIX': '/api/',
+        'COMPONENT_SPLIT_REQUEST': True,
+        'SORT_OPERATIONS_BY_NAME': True,
+    }
 
 # =============================================================================
 # CELERY CONFIGURATION
@@ -257,7 +297,7 @@ LOGGING = {
             'style': '{',
         },
         'json': {
-            'format': '{"level": "%(levelname)s", "time": "%(asctime)s", "module": "%(module)s", "message": "%(message)s"}',
+            '()': 'config.logging.StructuredJSONFormatter',
         },
     },
     'handlers': {
@@ -270,7 +310,7 @@ LOGGING = {
             'filename': str(BASE_DIR / 'logs' / 'webhook-service.log'),
             'maxBytes': env_int("LOG_FILE_MAX_BYTES", 1024 * 1024 * 10, minimum=1),
             'backupCount': env_int("LOG_FILE_BACKUP_COUNT", 5, minimum=1),
-            'formatter': 'verbose',
+            'formatter': 'json',
         },
     },
     'loggers': {

@@ -87,6 +87,8 @@ class HttpxWebhookGateway(HttpGateway):
                 logger.warning(
                     "webhook_delivery_transport_error",
                     extra={
+                        "event": "webhook_delivery_transport_error",
+                        "component": "httpx_webhook_gateway",
                         "target_url": request.url,
                         "attempts": attempts,
                         "elapsed_seconds": elapsed,
@@ -150,6 +152,8 @@ class HttpxWebhookGateway(HttpGateway):
         logger.info(
             "webhook_delivery_response",
             extra={
+                "event": "webhook_delivery_response",
+                "component": "httpx_webhook_gateway",
                 "target_url": request.url,
                 "status_code": status_code,
                 "elapsed_seconds": elapsed_seconds,

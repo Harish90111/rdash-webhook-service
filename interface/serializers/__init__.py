@@ -6,11 +6,17 @@ from interface.serializers.subscriptions import (
     SubscriptionResponseSerializer,
 )
 from interface.serializers.events import EventIngestSerializer, EventResponseSerializer
+from interface.serializers.monitoring import (
+    HealthCheckResponseSerializer,
+    TenantMetricsResponseSerializer,
+)
 
 __all__ = [
     "EventIngestSerializer",
     "EventResponseSerializer",
+    "HealthCheckResponseSerializer",
     "SubscriptionCreateSerializer",
     "SubscriptionPatchSerializer",
     "SubscriptionResponseSerializer",
+    "TenantMetricsResponseSerializer",
 ]

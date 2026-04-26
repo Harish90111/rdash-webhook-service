@@ -5,8 +5,10 @@ from django.urls import path
 from interface.views import (
     APIRootView,
     EventIngestionView,
+    HealthCheckView,
     SubscriptionCollectionView,
     SubscriptionDetailView,
+    TenantMetricsView,
 )
 
 
@@ -14,6 +16,8 @@ app_name = "interface"
 
 urlpatterns = [
     path("", APIRootView.as_view(), name="api-root"),
+    path("health/", HealthCheckView.as_view(), name="health-check"),
+    path("metrics/", TenantMetricsView.as_view(), name="tenant-metrics"),
     path("events/", EventIngestionView.as_view(), name="event-ingestion"),
     path("subscriptions/", SubscriptionCollectionView.as_view(), name="subscription-list"),
     path(

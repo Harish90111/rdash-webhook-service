@@ -50,10 +50,26 @@ def dispatch_outbox_batch(self, limit=None, locked_by=None):
             )
             outbox_repository.mark_published(str(message.id), str(message.tenant_id))
         except ValueError as exc:
-            logger.exception("outbox_dispatch_permanent_failure", extra={"outbox_message_id": str(message.id)})
+            logger.exception(
+                "outbox_dispatch_permanent_failure",
+                extra={
+                    "event": "outbox_dispatch_permanent_failure",
+                    "component": "outbox_dispatcher",
+                    "outbox_message_id": str(message.id),
+                    "tenant_id": str(message.tenant_id),
+                },
+            )
             outbox_repository.mark_failed(str(message.id), str(message.tenant_id), str(exc))
         except Exception as exc:
-            logger.exception("outbox_dispatch_failed", extra={"outbox_message_id": str(message.id)})
+            logger.exception(
+                "outbox_dispatch_failed",
+                extra={
+                    "event": "outbox_dispatch_failed",
+                    "component": "outbox_dispatcher",
+                    "outbox_message_id": str(message.id),
+                    "tenant_id": str(message.tenant_id),
+                },
+            )
             delay = calculate_retry_delay(
                 message.attempts,
                 base_delay=float(getattr(settings, "WEBHOOK_OUTBOX_BASE_RETRY_DELAY", 1.0)),
@@ -87,7 +103,13 @@ def fanout_event(self, event_id: str, tenant_id: str):
     )(event_id=event_id, tenant_id=tenant_id)
     logger.info(
         "fanout_event_completed",
-        extra={"event_id": event_id, "tenant_id": tenant_id, "enqueued_count": enqueued_count},
+        extra={
+            "event": "fanout_event_completed",
+            "component": "fanout_worker",
+            "event_id": event_id,
+            "tenant_id": tenant_id,
+            "enqueued_count": enqueued_count,
+        },
     )
 
 
@@ -119,7 +141,13 @@ def deliver_webhook(self, attempt_id: str, tenant_id: str):
         )(attempt_id=attempt_id, tenant_id=tenant_id)
     logger.info(
         "deliver_webhook_completed",
-        extra={"attempt_id": attempt_id, "tenant_id": tenant_id, "status": attempt.status.value},
+        extra={
+            "event": "deliver_webhook_completed",
+            "component": "delivery_worker",
+            "attempt_id": attempt_id,
+            "tenant_id": tenant_id,
+            "status": attempt.status.value,
+        },
     )
 
 

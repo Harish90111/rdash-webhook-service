@@ -16,5 +16,11 @@ class APIRootView(ThinAPIView):
             {
                 "service": "rdash-webhook-service",
                 "version": "v1",
+                "endpoints": {
+                    "health": "/api/health/",
+                    "metrics": "/api/metrics/",
+                    "events": "/api/events/",
+                    "subscriptions": "/api/subscriptions/",
+                },
             }
         )
