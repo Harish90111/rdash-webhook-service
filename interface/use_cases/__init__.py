@@ -1,5 +1,6 @@
 """Application use cases used by interface adapters."""
 
+from interface.use_cases.api_keys import IssueTenantAPIKey
 from interface.use_cases.delivery_tasks import (
     DeliverWebhook,
     FanOutEvent,
@@ -22,6 +23,7 @@ __all__ = [
     "FanOutEvent",
     "GetSubscription",
     "IngestEvent",
+    "IssueTenantAPIKey",
     "ListSubscriptions",
     "PatchSubscription",
     "delivery_task_id",

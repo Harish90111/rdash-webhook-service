@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from interface.views.events import EventIngestionView
 
@@ -31,7 +31,7 @@ def persist_with_outbox(event):
     return MemoryEventRepository().create(event)
 
 
-class TestEventIngestionView(EventIngestionView):
+class EventIngestionTestView(EventIngestionView):
     event_repository_class = MemoryEventRepository
     persist_event_with_outbox = staticmethod(persist_with_outbox)
 
@@ -39,13 +39,16 @@ class TestEventIngestionView(EventIngestionView):
 def authenticated_request(data):
     factory = APIRequestFactory()
     request = factory.post("/api/events/", data=data, format="json")
-    request.user = SimpleNamespace(is_authenticated=True, tenant_id="tenant-1")
+    force_authenticate(
+        request,
+        user=SimpleNamespace(is_authenticated=True, tenant_id="tenant-1"),
+    )
     return request
 
 
 def test_event_ingestion_creates_event_from_principal_tenant():
     MemoryEventRepository.events = {}
-    view = TestEventIngestionView.as_view()
+    view = EventIngestionTestView.as_view()
     request = authenticated_request(
         {
             "event_type": "po.created",
@@ -63,7 +66,7 @@ def test_event_ingestion_creates_event_from_principal_tenant():
 
 def test_event_ingestion_returns_200_for_duplicate_submission():
     MemoryEventRepository.events = {}
-    view = TestEventIngestionView.as_view()
+    view = EventIngestionTestView.as_view()
     payload = {
         "event_type": "po.created",
         "payload": {"id": "PO-1"},
@@ -80,7 +83,7 @@ def test_event_ingestion_returns_200_for_duplicate_submission():
 
 
 def test_event_ingestion_rejects_body_tenant_id():
-    view = TestEventIngestionView.as_view()
+    view = EventIngestionTestView.as_view()
     request = authenticated_request(
         {
             "tenant_id": "attacker",

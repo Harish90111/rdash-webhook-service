@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from domain.entities import Subscription
 from interface.views.subscriptions import SubscriptionCollectionView, SubscriptionDetailView
@@ -35,24 +35,27 @@ class InMemorySubscriptionRepository:
         del self.subscriptions[(tenant_id, subscription_id)]
 
 
-class TestSubscriptionCollectionView(SubscriptionCollectionView):
+class SubscriptionCollectionTestView(SubscriptionCollectionView):
     repository_class = InMemorySubscriptionRepository
 
 
-class TestSubscriptionDetailView(SubscriptionDetailView):
+class SubscriptionDetailTestView(SubscriptionDetailView):
     repository_class = InMemorySubscriptionRepository
 
 
 def authenticated_request(method, path, data=None):
     factory = APIRequestFactory()
     request = getattr(factory, method)(path, data=data or {}, format="json")
-    request.user = SimpleNamespace(is_authenticated=True, tenant_id="tenant-1")
+    force_authenticate(
+        request,
+        user=SimpleNamespace(is_authenticated=True, tenant_id="tenant-1"),
+    )
     return request
 
 
 def test_create_subscription_returns_secret_once_and_uses_principal_tenant():
     InMemorySubscriptionRepository.subscriptions = {}
-    view = TestSubscriptionCollectionView.as_view()
+    view = SubscriptionCollectionTestView.as_view()
     request = authenticated_request(
         "post",
         "/api/subscriptions/",
@@ -78,7 +81,7 @@ def test_list_subscription_does_not_return_secret():
             secret="stored-secret-hash",
         )
     )
-    view = TestSubscriptionCollectionView.as_view()
+    view = SubscriptionCollectionTestView.as_view()
     request = authenticated_request("get", "/api/subscriptions/")
 
     response = view(request)
@@ -100,7 +103,7 @@ def test_patch_subscription_can_toggle_active_without_secret():
             secret="stored-secret-hash",
         )
     )
-    view = TestSubscriptionDetailView.as_view()
+    view = SubscriptionDetailTestView.as_view()
     request = authenticated_request(
         "patch",
         f"/api/subscriptions/{subscription_id}/",
@@ -115,7 +118,7 @@ def test_patch_subscription_can_toggle_active_without_secret():
 
 
 def test_create_subscription_rejects_body_tenant_id():
-    view = TestSubscriptionCollectionView.as_view()
+    view = SubscriptionCollectionTestView.as_view()
     request = authenticated_request(
         "post",
         "/api/subscriptions/",

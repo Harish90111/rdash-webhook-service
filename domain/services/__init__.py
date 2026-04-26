@@ -1,5 +1,6 @@
 """Domain service helpers."""
 
+from domain.services.api_keys import generate_api_key, get_api_key_prefix, hash_api_key
 from domain.services.idempotency import (
     build_idempotency_key,
     is_duplicate_submission,
@@ -17,9 +18,12 @@ from domain.services.wildcard_matching import match_subscriptions, matches_wildc
 __all__ = [
     "build_idempotency_key",
     "calculate_retry_delay",
+    "generate_api_key",
     "generate_signature",
+    "get_api_key_prefix",
     "get_next_retry_time",
     "get_retry_schedule",
+    "hash_api_key",
     "is_duplicate_submission",
     "match_subscriptions",
     "matches_wildcard",
