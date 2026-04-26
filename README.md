@@ -136,6 +136,7 @@ Examples below use `X-API-Key`.
 - `GET /api/health/`
 - `GET /api/metrics/`
 - `GET /api/deliveries/`
+- `POST /api/deliveries/{id}/retry/`
 - `POST /api/events/`
 - `GET /api/subscriptions/`
 - `POST /api/subscriptions/`
@@ -238,6 +239,16 @@ The delivery listing is tenant-scoped and supports filtering by:
 - `event_id`
 - `subscription_id`
 
+### 4. Manually requeue a failed delivery
+
+```bash
+curl -X POST http://localhost:8000/api/deliveries/DELIVERY_ATTEMPT_ID/retry/ \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+Manual retry is allowed for delivery attempts in `failed` or `dead_letter`
+state and requeues the existing attempt for immediate processing.
+
 ## Webhook Delivery Contract
 
 Outbound requests are `POST` requests with JSON bodies and these headers:
@@ -325,6 +336,7 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 - `GET /api/health/` for service health
 - `GET /api/metrics/` for tenant-scoped metrics
 - `GET /api/deliveries/` for tenant-scoped delivery visibility
+- `POST /api/deliveries/{id}/retry/` for manual requeue of failed attempts
 
 ## Documentation
 
@@ -336,7 +348,6 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 
 ## Current Deliberate Cuts
 
-- no manual retry endpoint yet
 - no per-target circuit breaker yet
 
 Those are tracked in [docs/ASSIGNMENT_CHECKLIST.md](./docs/ASSIGNMENT_CHECKLIST.md).
