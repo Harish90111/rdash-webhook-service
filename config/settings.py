@@ -7,9 +7,25 @@ Clean Architecture structure:
 - data/       : Infrastructure implementations (models, repositories, gateways)
 """
 
-import os
 from pathlib import Path
+
 from dotenv import load_dotenv
+
+from config.env import (
+    DEFAULT_DEV_SECRET_KEY,
+    VALID_APP_ENVS,
+    build_celery_beat_schedule,
+    build_celery_task_annotations,
+    build_celery_transport_options,
+    build_database_settings,
+    env_bool,
+    env_choice,
+    env_float,
+    env_int,
+    env_list,
+    env_str,
+    validate_runtime_settings,
+)
 
 # Load environment variables
 load_dotenv()
@@ -21,11 +37,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY SETTINGS
 # =============================================================================
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-in-production')
-
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+APP_ENV = env_choice("APP_ENV", "development", choices=VALID_APP_ENVS)
+DEBUG = env_bool("DEBUG", APP_ENV != "production")
+SECRET_KEY = env_str("DJANGO_SECRET_KEY", DEFAULT_DEV_SECRET_KEY)
+ALLOWED_HOSTS = env_list(
+    "ALLOWED_HOSTS",
+    ["localhost", "127.0.0.1", "[::1]"] if DEBUG else [],
+)
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", [])
+validate_runtime_settings(
+    app_env=APP_ENV,
+    secret_key=SECRET_KEY,
+    allowed_hosts=ALLOWED_HOSTS,
+)
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -81,31 +105,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # DATABASE - PostgreSQL (with SQLite fallback for local dev)
 # =============================================================================
 
-# Check if we should use SQLite (for local development without Docker)
-USE_SQLITE = os.getenv('USE_SQLITE', 'False').lower() == 'true'
-
-if USE_SQLITE:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('POSTGRES_DB', 'rdash_webhooks'),
-            'USER': os.getenv('POSTGRES_USER', 'postgres'),
-            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
-            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
-            'PORT': os.getenv('POSTGRES_PORT', '5432'),
-            'CONN_MAX_AGE': 60,  # Connection pooling
-            'OPTIONS': {
-                'connect_timeout': 10,
-            },
-        }
-    }
+USE_SQLITE = env_bool("USE_SQLITE", False)
+DATABASES = build_database_settings(BASE_DIR, use_sqlite=USE_SQLITE)
 
 # =============================================================================
 # PASSWORD VALIDATION
@@ -163,8 +164,15 @@ REST_FRAMEWORK = {
 # =============================================================================
 
 # Redis as message broker
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_BROKER_URL = env_str("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = env_str("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = env_bool(
+    "CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP",
+    True,
+)
+CELERY_BROKER_POOL_LIMIT = env_int("CELERY_BROKER_POOL_LIMIT", 10, minimum=0)
+CELERY_BROKER_HEARTBEAT = env_int("CELERY_BROKER_HEARTBEAT", 30, minimum=0)
+CELERY_BROKER_TRANSPORT_OPTIONS = build_celery_transport_options()
 
 # Task settings
 CELERY_TASK_SERIALIZER = 'json'
@@ -172,56 +180,69 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TIMEZONE = 'UTC'
 CELERY_ENABLE_UTC = True
+CELERY_TASK_TRACK_STARTED = env_bool("CELERY_TASK_TRACK_STARTED", True)
 
 # Task execution settings
 CELERY_TASK_ACKS_LATE = True  # Acknowledge after task completes
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Prevent worker from grabbing too many tasks
-CELERY_TASK_TIME_LIMIT = 300  # Hard timeout (5 minutes)
-CELERY_TASK_SOFT_TIME_LIMIT = 240  # Soft timeout (4 minutes)
-CELERY_TASK_DEFAULT_QUEUE = os.getenv('CELERY_TASK_DEFAULT_QUEUE', 'webhooks.default')
+CELERY_WORKER_PREFETCH_MULTIPLIER = env_int(
+    "CELERY_WORKER_PREFETCH_MULTIPLIER",
+    1,
+    minimum=1,
+)  # Prevent worker from grabbing too many tasks
+CELERY_WORKER_CONCURRENCY = env_int(
+    "CELERY_WORKER_CONCURRENCY",
+    2 if DEBUG else 4,
+    minimum=1,
+)
+CELERY_WORKER_MAX_TASKS_PER_CHILD = env_int(
+    "CELERY_WORKER_MAX_TASKS_PER_CHILD",
+    500,
+    minimum=1,
+)
+CELERY_WORKER_MAX_MEMORY_PER_CHILD = env_int(
+    "CELERY_WORKER_MAX_MEMORY_PER_CHILD",
+    0,
+    minimum=0,
+)
+CELERY_WORKER_SEND_TASK_EVENTS = env_bool("CELERY_WORKER_SEND_TASK_EVENTS", False)
+CELERY_TASK_TIME_LIMIT = env_int("CELERY_TASK_TIME_LIMIT", 300, minimum=1)
+CELERY_TASK_SOFT_TIME_LIMIT = env_int("CELERY_TASK_SOFT_TIME_LIMIT", 240, minimum=1)
+CELERY_TASK_DEFAULT_QUEUE = env_str("CELERY_TASK_DEFAULT_QUEUE", "webhooks.default")
 CELERY_TASK_ROUTES = {
     'interface.tasks.dispatch_outbox_batch': {'queue': 'webhooks.outbox'},
     'interface.tasks.fanout_event': {'queue': 'webhooks.fanout'},
     'interface.tasks.deliver_webhook': {'queue': 'webhooks.delivery'},
 }
-CELERY_TASK_ANNOTATIONS = {
-    'interface.tasks.deliver_webhook': {
-        'rate_limit': os.getenv('WEBHOOK_DELIVERY_RATE_LIMIT', '120/m'),
-    },
-}
-CELERY_BEAT_SCHEDULE = {
-    'dispatch-webhook-outbox': {
-        'task': 'interface.tasks.dispatch_outbox_batch',
-        'schedule': float(os.getenv('WEBHOOK_OUTBOX_DISPATCH_INTERVAL_SECONDS', '5.0')),
-    },
-}
+CELERY_TASK_ANNOTATIONS = build_celery_task_annotations()
+CELERY_BEAT_SCHEDULE = build_celery_beat_schedule()
+CELERY_BEAT_MAX_LOOP_INTERVAL = env_int("CELERY_BEAT_MAX_LOOP_INTERVAL", 30, minimum=1)
 
 # Retry settings
-CELERY_TASK_DEFAULT_RETRY_DELAY = 60
-CELERY_TASK_MAX_RETRIES = 3
+CELERY_TASK_DEFAULT_RETRY_DELAY = env_int("CELERY_TASK_DEFAULT_RETRY_DELAY", 60, minimum=0)
+CELERY_TASK_MAX_RETRIES = env_int("CELERY_TASK_MAX_RETRIES", 3, minimum=0)
 
 # =============================================================================
 # WEBHOOK DELIVERY SETTINGS
 # =============================================================================
 
 # HTTP Gateway timeouts (strict for event-driven systems)
-WEBHOOK_CONNECT_TIMEOUT = int(os.getenv('WEBHOOK_CONNECT_TIMEOUT', '5'))  # seconds
-WEBHOOK_READ_TIMEOUT = int(os.getenv('WEBHOOK_READ_TIMEOUT', '15'))  # seconds
+WEBHOOK_CONNECT_TIMEOUT = env_int("WEBHOOK_CONNECT_TIMEOUT", 5, minimum=1)  # seconds
+WEBHOOK_READ_TIMEOUT = env_int("WEBHOOK_READ_TIMEOUT", 15, minimum=1)  # seconds
 
 # Retry policy
-WEBHOOK_MAX_RETRIES = int(os.getenv('WEBHOOK_MAX_RETRIES', '5'))
-WEBHOOK_BASE_RETRY_DELAY = float(os.getenv('WEBHOOK_BASE_RETRY_DELAY', '1.0'))  # seconds
-WEBHOOK_MAX_RETRY_DELAY = float(os.getenv('WEBHOOK_MAX_RETRY_DELAY', '60.0'))  # seconds
-WEBHOOK_RETRY_JITTER = float(os.getenv('WEBHOOK_RETRY_JITTER', '0.1'))  # jitter factor
+WEBHOOK_MAX_RETRIES = env_int("WEBHOOK_MAX_RETRIES", 5, minimum=0)
+WEBHOOK_BASE_RETRY_DELAY = env_float("WEBHOOK_BASE_RETRY_DELAY", 1.0, minimum=0.0)  # seconds
+WEBHOOK_MAX_RETRY_DELAY = env_float("WEBHOOK_MAX_RETRY_DELAY", 60.0, minimum=0.0)  # seconds
+WEBHOOK_RETRY_JITTER = env_float("WEBHOOK_RETRY_JITTER", 0.1, minimum=0.0)  # jitter factor
 
 # Fan-out settings
-WEBHOOK_FANOUT_BATCH_SIZE = int(os.getenv('WEBHOOK_FANOUT_BATCH_SIZE', '100'))
-WEBHOOK_OUTBOX_DISPATCH_BATCH_SIZE = int(os.getenv('WEBHOOK_OUTBOX_DISPATCH_BATCH_SIZE', '100'))
-WEBHOOK_OUTBOX_STALE_LOCK_SECONDS = int(os.getenv('WEBHOOK_OUTBOX_STALE_LOCK_SECONDS', '300'))
-WEBHOOK_OUTBOX_BASE_RETRY_DELAY = float(os.getenv('WEBHOOK_OUTBOX_BASE_RETRY_DELAY', '1.0'))
-WEBHOOK_OUTBOX_MAX_RETRY_DELAY = float(os.getenv('WEBHOOK_OUTBOX_MAX_RETRY_DELAY', '60.0'))
-WEBHOOK_TENANT_QUEUE_BUCKETS = int(os.getenv('WEBHOOK_TENANT_QUEUE_BUCKETS', '16'))
-WEBHOOK_SECRET_ENCRYPTION_KEY = os.getenv('WEBHOOK_SECRET_ENCRYPTION_KEY', '')
+WEBHOOK_FANOUT_BATCH_SIZE = env_int("WEBHOOK_FANOUT_BATCH_SIZE", 100, minimum=1)
+WEBHOOK_OUTBOX_DISPATCH_BATCH_SIZE = env_int("WEBHOOK_OUTBOX_DISPATCH_BATCH_SIZE", 100, minimum=1)
+WEBHOOK_OUTBOX_STALE_LOCK_SECONDS = env_int("WEBHOOK_OUTBOX_STALE_LOCK_SECONDS", 300, minimum=1)
+WEBHOOK_OUTBOX_BASE_RETRY_DELAY = env_float("WEBHOOK_OUTBOX_BASE_RETRY_DELAY", 1.0, minimum=0.0)
+WEBHOOK_OUTBOX_MAX_RETRY_DELAY = env_float("WEBHOOK_OUTBOX_MAX_RETRY_DELAY", 60.0, minimum=0.0)
+WEBHOOK_TENANT_QUEUE_BUCKETS = env_int("WEBHOOK_TENANT_QUEUE_BUCKETS", 16, minimum=1)
+WEBHOOK_SECRET_ENCRYPTION_KEY = env_str("WEBHOOK_SECRET_ENCRYPTION_KEY", "")
 
 # =============================================================================
 # LOGGING CONFIGURATION
@@ -247,23 +268,23 @@ LOGGING = {
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': str(BASE_DIR / 'logs' / 'webhook-service.log'),
-            'maxBytes': 1024 * 1024 * 10,  # 10MB
-            'backupCount': 5,
+            'maxBytes': env_int("LOG_FILE_MAX_BYTES", 1024 * 1024 * 10, minimum=1),
+            'backupCount': env_int("LOG_FILE_BACKUP_COUNT", 5, minimum=1),
             'formatter': 'verbose',
         },
     },
     'loggers': {
         'django': {
             'handlers': ['console', 'file'],
-            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'level': env_str("DJANGO_LOG_LEVEL", "INFO"),
         },
         'celery': {
             'handlers': ['console', 'file'],
-            'level': os.getenv('CELERY_LOG_LEVEL', 'INFO'),
+            'level': env_str("CELERY_LOG_LEVEL", "INFO"),
         },
         'webhook': {
             'handlers': ['console', 'file'],
-            'level': os.getenv('WEBHOOK_LOG_LEVEL', 'DEBUG'),
+            'level': env_str("WEBHOOK_LOG_LEVEL", "DEBUG"),
         },
     },
 }
