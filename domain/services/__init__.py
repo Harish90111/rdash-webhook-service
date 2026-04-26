@@ -12,11 +12,21 @@ from domain.services.retry_policy import (
     get_retry_schedule,
     should_retry,
 )
-from domain.services.signing import generate_signature, verify_signature
+from domain.services.signing import (
+    SIGNATURE_HEADER_NAME,
+    SIGNATURE_VERSION,
+    SIGNATURE_VERSION_HEADER_NAME,
+    TIMESTAMP_HEADER_NAME,
+    build_signature_headers,
+    generate_signature,
+    verify_signature,
+    verify_signature_headers,
+)
 from domain.services.wildcard_matching import match_subscriptions, matches_wildcard
 
 __all__ = [
     "build_idempotency_key",
+    "build_signature_headers",
     "calculate_retry_delay",
     "generate_api_key",
     "generate_signature",
@@ -28,6 +38,11 @@ __all__ = [
     "match_subscriptions",
     "matches_wildcard",
     "normalize_idempotency_key",
+    "SIGNATURE_HEADER_NAME",
+    "SIGNATURE_VERSION",
+    "SIGNATURE_VERSION_HEADER_NAME",
     "should_retry",
+    "TIMESTAMP_HEADER_NAME",
     "verify_signature",
+    "verify_signature_headers",
 ]

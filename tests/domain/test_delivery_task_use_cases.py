@@ -2,6 +2,13 @@ from datetime import datetime, timedelta
 
 from domain.entities import DeliveryAttempt, DeliveryStatus, Subscription, WebhookEvent
 from domain.interfaces import HttpResponse
+from domain.services import (
+    SIGNATURE_HEADER_NAME,
+    SIGNATURE_VERSION,
+    SIGNATURE_VERSION_HEADER_NAME,
+    TIMESTAMP_HEADER_NAME,
+    verify_signature_headers,
+)
 from interface.use_cases.delivery_tasks import (
     DeliverWebhook,
     FanOutEvent,
@@ -188,7 +195,14 @@ def test_deliver_webhook_marks_success_and_sends_signature_headers():
     )(attempt_id=attempt.id, tenant_id="tenant-1")
 
     assert result.status == DeliveryStatus.SUCCESS
-    assert gateway.requests[0].headers["X-Signature"].startswith("sha256=")
+    assert gateway.requests[0].headers[SIGNATURE_HEADER_NAME].startswith("sha256=")
+    assert gateway.requests[0].headers[SIGNATURE_VERSION_HEADER_NAME] == SIGNATURE_VERSION
+    assert gateway.requests[0].headers[TIMESTAMP_HEADER_NAME]
+    assert verify_signature_headers(
+        "secret",
+        gateway.requests[0].body,
+        gateway.requests[0].headers,
+    ) is True
 
 
 def test_deliver_webhook_skips_already_in_progress_attempt():

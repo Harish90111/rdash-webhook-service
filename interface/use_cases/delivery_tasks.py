@@ -15,7 +15,7 @@ from domain.interfaces import (
     HttpTimeouts,
     SubscriptionRepository,
 )
-from domain.services import generate_signature, get_next_retry_time, matches_wildcard, should_retry
+from domain.services import build_signature_headers, get_next_retry_time, matches_wildcard, should_retry
 
 
 def tenant_queue_name(tenant_id: str, *, buckets: int = 16) -> str:
@@ -135,13 +135,13 @@ class DeliverWebhook:
                 HttpRequest(
                     url=subscription.target_url,
                     body=body,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Webhook-Event": event.id,
-                        "X-Webhook-Event-Type": event.event_type,
-                        "X-Webhook-Timestamp": timestamp,
-                        "X-Signature": generate_signature(signing_secret, timestamp, body),
-                    },
+                    headers=self._build_request_headers(
+                        signing_secret,
+                        event.id,
+                        event.event_type,
+                        timestamp,
+                        body,
+                    ),
                     timeouts=HttpTimeouts(
                         connect_seconds=self.connect_timeout,
                         read_seconds=self.read_timeout,
@@ -214,3 +214,19 @@ class DeliverWebhook:
                 context={"subscription_id": subscription.id},
             )
         return subscription.secret
+
+    @staticmethod
+    def _build_request_headers(
+        signing_secret: str,
+        event_id: str,
+        event_type: str,
+        timestamp: str,
+        body: str,
+    ):
+        headers = {
+            "Content-Type": "application/json",
+            "X-Webhook-Event": event_id,
+            "X-Webhook-Event-Type": event_type,
+        }
+        headers.update(build_signature_headers(signing_secret, timestamp, body))
+        return headers
