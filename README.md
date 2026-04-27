@@ -106,11 +106,18 @@ Local URLs:
 There is no public tenant-creation API. Bootstrap happens through Django admin
 or the management command flow.
 
-1. create a Django admin user:
+1. ensure the local Django admin user exists:
 
 ```bash
-python manage.py createsuperuser
+python manage.py ensure_admin_user
 ```
+
+The local setup script and Docker web startup already run this automatically.
+The default dev credentials come from `.env`:
+
+- `DJANGO_SUPERUSER_USERNAME=admin`
+- `DJANGO_SUPERUSER_PASSWORD=admin`
+- `DJANGO_SUPERUSER_EMAIL=admin@example.com`
 
 2. create a `Tenant` in `/admin/`
 3. create a tenant API key either in `/admin/` or with:
@@ -354,6 +361,7 @@ pytest tests/e2e/test_webhook_delivery_flow.py -q
 - [docs/API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md)
 - [docs/QUICKSTART.md](./docs/QUICKSTART.md)
 - [docs/WEBHOOK_INTEGRATION.md](./docs/WEBHOOK_INTEGRATION.md)
+- [docs/DELIVERY_ATTEMPT_AND_CIRCUIT_BREAKER_TESTING.md](./docs/DELIVERY_ATTEMPT_AND_CIRCUIT_BREAKER_TESTING.md)
 - [docs/ASSIGNMENT_CHECKLIST.md](./docs/ASSIGNMENT_CHECKLIST.md)
 
 ## Remaining Polish
