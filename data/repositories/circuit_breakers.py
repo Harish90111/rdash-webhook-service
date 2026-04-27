@@ -1,6 +1,7 @@
 """Django-backed circuit breaker state for outbound target protection."""
 
 from datetime import timedelta
+import logging
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -8,6 +9,9 @@ from django.utils import timezone
 
 from data.models.models import CircuitBreakerState, CircuitBreakerStatus
 from domain.interfaces import CircuitBreaker, CircuitBreakerDecision
+
+
+logger = logging.getLogger("webhook.delivery")
 
 
 class DjangoCircuitBreaker(CircuitBreaker):
@@ -41,6 +45,17 @@ class DjangoCircuitBreaker(CircuitBreaker):
             if state.state == CircuitBreakerStatus.OPEN:
                 retry_after_seconds = self._retry_after_seconds(state, now)
                 if retry_after_seconds > 0:
+                    logger.warning(
+                        "circuit_breaker_open_blocked",
+                        extra={
+                            "event": "circuit_breaker_open_blocked",
+                            "component": "circuit_breaker",
+                            "tenant_id": tenant_id,
+                            "target_url": target_url,
+                            "retry_after_seconds": retry_after_seconds,
+                            "consecutive_failures": state.consecutive_failures,
+                        },
+                    )
                     return CircuitBreakerDecision(
                         allowed=False,
                         state=CircuitBreakerStatus.OPEN,
@@ -48,11 +63,32 @@ class DjangoCircuitBreaker(CircuitBreaker):
                     )
                 state.state = CircuitBreakerStatus.HALF_OPEN
                 state.save(update_fields=["state", "updated_at"])
+                logger.info(
+                    "circuit_breaker_half_open_probe_allowed",
+                    extra={
+                        "event": "circuit_breaker_half_open_probe_allowed",
+                        "component": "circuit_breaker",
+                        "tenant_id": tenant_id,
+                        "target_url": target_url,
+                        "consecutive_failures": state.consecutive_failures,
+                    },
+                )
                 return CircuitBreakerDecision(
                     allowed=True,
                     state=CircuitBreakerStatus.HALF_OPEN,
                 )
             if state.state == CircuitBreakerStatus.HALF_OPEN:
+                logger.warning(
+                    "circuit_breaker_half_open_blocked",
+                    extra={
+                        "event": "circuit_breaker_half_open_blocked",
+                        "component": "circuit_breaker",
+                        "tenant_id": tenant_id,
+                        "target_url": target_url,
+                        "retry_after_seconds": float(self.recovery_timeout_seconds),
+                        "consecutive_failures": state.consecutive_failures,
+                    },
+                )
                 return CircuitBreakerDecision(
                     allowed=False,
                     state=CircuitBreakerStatus.HALF_OPEN,
@@ -67,6 +103,8 @@ class DjangoCircuitBreaker(CircuitBreaker):
         now = timezone.now()
         with transaction.atomic():
             state = self._get_or_create_locked(tenant_id, target_url)
+            previous_state = state.state
+            previous_failures = state.consecutive_failures
             state.state = CircuitBreakerStatus.CLOSED
             state.consecutive_failures = 0
             state.opened_at = None
@@ -80,11 +118,24 @@ class DjangoCircuitBreaker(CircuitBreaker):
                     "updated_at",
                 ]
             )
+            if previous_state != CircuitBreakerStatus.CLOSED or previous_failures:
+                logger.info(
+                    "circuit_breaker_closed",
+                    extra={
+                        "event": "circuit_breaker_closed",
+                        "component": "circuit_breaker",
+                        "tenant_id": tenant_id,
+                        "target_url": target_url,
+                        "previous_state": previous_state.value,
+                        "previous_failures": previous_failures,
+                    },
+                )
 
     def record_failure(self, *, tenant_id: str, target_url: str) -> None:
         now = timezone.now()
         with transaction.atomic():
             state = self._get_or_create_locked(tenant_id, target_url)
+            previous_state = state.state
             state.last_failure_at = now
             if state.state == CircuitBreakerStatus.HALF_OPEN:
                 state.state = CircuitBreakerStatus.OPEN
@@ -110,6 +161,19 @@ class DjangoCircuitBreaker(CircuitBreaker):
                     "updated_at",
                 ]
             )
+            if state.state == CircuitBreakerStatus.OPEN:
+                logger.warning(
+                    "circuit_breaker_opened",
+                    extra={
+                        "event": "circuit_breaker_opened",
+                        "component": "circuit_breaker",
+                        "tenant_id": tenant_id,
+                        "target_url": target_url,
+                        "previous_state": previous_state.value,
+                        "consecutive_failures": state.consecutive_failures,
+                        "failure_threshold": self.failure_threshold,
+                    },
+                )
 
     def _get_or_create_locked(self, tenant_id: str, target_url: str) -> CircuitBreakerState:
         try:

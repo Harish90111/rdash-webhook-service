@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
@@ -17,6 +18,9 @@ from domain.interfaces import (
     SubscriptionRepository,
 )
 from domain.services import build_signature_headers, get_next_retry_time, matches_wildcard, should_retry
+
+
+logger = logging.getLogger("webhook.delivery")
 
 
 def tenant_queue_name(tenant_id: str, *, buckets: int = 16) -> str:
@@ -56,6 +60,17 @@ class FanOutEvent:
             for subscription in self.subscription_repository.list_active_by_tenant(tenant_id)
             if matches_wildcard(event.event_type, subscription.event_type)
         ]
+        logger.info(
+            "fanout_event_prepared",
+            extra={
+                "event": "fanout_event_prepared",
+                "component": "fanout_worker",
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+                "event_type": event.event_type,
+                "matched_count": len(matching_subscriptions),
+            },
+        )
 
         enqueued_count = 0
         for subscription in matching_subscriptions:
@@ -85,6 +100,19 @@ class FanOutEvent:
             }:
                 self.enqueue_delivery(attempt, tenant_id)
                 enqueued_count += 1
+            else:
+                logger.debug(
+                    "fanout_delivery_attempt_skipped",
+                    extra={
+                        "event": "fanout_delivery_attempt_skipped",
+                        "component": "fanout_worker",
+                        "tenant_id": tenant_id,
+                        "event_id": event.id,
+                        "subscription_id": subscription.id,
+                        "attempt_id": attempt.id,
+                        "status": attempt.status.value,
+                    },
+                )
 
         self.event_repository.mark_processed(event.id, tenant_id)
         return enqueued_count
@@ -125,7 +153,18 @@ class DeliverWebhook:
     def __call__(self, *, attempt_id: str, tenant_id: str) -> DeliveryAttempt:
         attempt = self.delivery_attempt_repository.claim_for_delivery(attempt_id, tenant_id)
         if attempt is None:
-            return self.delivery_attempt_repository.get_by_id(attempt_id, tenant_id)
+            existing_attempt = self.delivery_attempt_repository.get_by_id(attempt_id, tenant_id)
+            logger.info(
+                "delivery_attempt_claim_skipped",
+                extra={
+                    "event": "delivery_attempt_claim_skipped",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt_id,
+                    "status": existing_attempt.status.value,
+                },
+            )
+            return existing_attempt
 
         event = self.event_repository.get_by_id(attempt.event_id, tenant_id)
         subscription = self.subscription_repository.get_by_id(attempt.subscription_id, tenant_id)
@@ -138,6 +177,18 @@ class DeliverWebhook:
                 target_url=subscription.target_url,
             )
             if not breaker_decision.allowed:
+                logger.warning(
+                    "delivery_blocked_by_circuit_breaker",
+                    extra={
+                        "event": "delivery_blocked_by_circuit_breaker",
+                        "component": "delivery_worker",
+                        "tenant_id": tenant_id,
+                        "attempt_id": attempt_id,
+                        "subscription_id": subscription.id,
+                        "target_url": subscription.target_url,
+                        "retry_after_seconds": breaker_decision.retry_after_seconds,
+                    },
+                )
                 return self._record_failure(
                     attempt,
                     tenant_id,
@@ -179,6 +230,18 @@ class DeliverWebhook:
                     target_url=subscription.target_url,
                 )
             error_message = f"Webhook endpoint returned HTTP {response.status_code}."
+            logger.warning(
+                "delivery_attempt_http_failure",
+                extra={
+                    "event": "delivery_attempt_http_failure",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt_id,
+                    "subscription_id": subscription.id,
+                    "target_url": subscription.target_url,
+                    "status_code": response.status_code,
+                },
+            )
             return self._record_failure(
                 attempt,
                 tenant_id,
@@ -192,6 +255,18 @@ class DeliverWebhook:
                     tenant_id=tenant_id,
                     target_url=subscription.target_url,
                 )
+            logger.warning(
+                "delivery_attempt_transport_failure",
+                extra={
+                    "event": "delivery_attempt_transport_failure",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt_id,
+                    "subscription_id": subscription.id,
+                    "target_url": subscription.target_url,
+                    "error": str(exc) or exc.__class__.__name__,
+                },
+            )
             return self._record_failure(attempt, tenant_id, str(exc) or exc.__class__.__name__)
 
     def _record_failure(
@@ -223,10 +298,37 @@ class DeliverWebhook:
             persisted_attempt = self.delivery_attempt_repository.update(attempt, tenant_id)
             countdown_seconds = max(0.0, (next_retry_at - datetime.utcnow()).total_seconds())
             self.enqueue_retry(persisted_attempt, tenant_id, countdown_seconds)
+            logger.warning(
+                "delivery_attempt_retry_scheduled",
+                extra={
+                    "event": "delivery_attempt_retry_scheduled",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt.id,
+                    "status_code": status_code,
+                    "attempt_number": persisted_attempt.attempt_number,
+                    "next_retry_at": next_retry_at,
+                    "countdown_seconds": countdown_seconds,
+                    "error_message": safe_error_message,
+                },
+            )
             return persisted_attempt
 
         attempt.mark_dead_letter(safe_error_message)
-        return self.delivery_attempt_repository.update(attempt, tenant_id)
+        dead_letter_attempt = self.delivery_attempt_repository.update(attempt, tenant_id)
+        logger.error(
+            "delivery_attempt_dead_lettered",
+            extra={
+                "event": "delivery_attempt_dead_lettered",
+                "component": "delivery_worker",
+                "tenant_id": tenant_id,
+                "attempt_id": attempt.id,
+                "status_code": status_code,
+                "attempt_number": dead_letter_attempt.attempt_number,
+                "error_message": safe_error_message,
+            },
+        )
+        return dead_letter_attempt
 
     @staticmethod
     def _build_body(event) -> str:

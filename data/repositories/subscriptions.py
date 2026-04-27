@@ -1,6 +1,7 @@
 """Django implementation of the subscription repository contract."""
 
 import hashlib
+import logging
 from typing import Sequence
 
 from django.db import IntegrityError
@@ -10,6 +11,9 @@ from data.models.models import Tenant
 from data.security import DjangoSubscriptionSecretCipher
 from domain.entities import Subscription
 from domain.exceptions import SubscriptionNotFoundError
+
+
+logger = logging.getLogger("webhook.subscriptions")
 
 
 class DjangoSubscriptionRepository:
@@ -33,7 +37,20 @@ class DjangoSubscriptionRepository:
             )
         except IntegrityError as exc:
             raise ValueError("subscription violates a persistence constraint") from exc
-        return self._to_domain(model, secret=raw_secret)
+        persisted_subscription = self._to_domain(model, secret=raw_secret)
+        logger.info(
+            "subscription_persisted",
+            extra={
+                "event": "subscription_persisted",
+                "component": "subscription_repository",
+                "tenant_id": persisted_subscription.tenant_id,
+                "subscription_id": persisted_subscription.id,
+                "event_type": persisted_subscription.event_type,
+                "target_url": persisted_subscription.target_url,
+                "active": persisted_subscription.active,
+            },
+        )
+        return persisted_subscription
 
     def get_by_id(self, subscription_id: str, tenant_id: str) -> Subscription:
         return self._to_domain(self._get_model(subscription_id, tenant_id), reveal_secret=True)
@@ -69,7 +86,25 @@ class DjangoSubscriptionRepository:
             model.secret_encrypted = self.secret_cipher.encrypt(raw_secret)
             update_fields.extend(["secret_hash", "secret_encrypted"])
         model.save(update_fields=update_fields)
-        return self._to_domain(model, secret=subscription.secret, reveal_secret=bool(subscription.secret))
+        updated_subscription = self._to_domain(
+            model,
+            secret=subscription.secret,
+            reveal_secret=bool(subscription.secret),
+        )
+        logger.info(
+            "subscription_persisted_update",
+            extra={
+                "event": "subscription_persisted_update",
+                "component": "subscription_repository",
+                "tenant_id": updated_subscription.tenant_id,
+                "subscription_id": updated_subscription.id,
+                "event_type": updated_subscription.event_type,
+                "target_url": updated_subscription.target_url,
+                "active": updated_subscription.active,
+                "secret_rotated": bool(subscription.secret),
+            },
+        )
+        return updated_subscription
 
     def delete(self, subscription_id: str, tenant_id: str) -> None:
         deleted_count, _ = SubscriptionModel.objects.filter(
@@ -80,6 +115,15 @@ class DjangoSubscriptionRepository:
             raise SubscriptionNotFoundError(
                 context={"subscription_id": subscription_id, "tenant_id": tenant_id}
             )
+        logger.info(
+            "subscription_persisted_delete",
+            extra={
+                "event": "subscription_persisted_delete",
+                "component": "subscription_repository",
+                "tenant_id": tenant_id,
+                "subscription_id": subscription_id,
+            },
+        )
 
     @staticmethod
     def _ensure_tenant_exists(tenant_id: str) -> None:

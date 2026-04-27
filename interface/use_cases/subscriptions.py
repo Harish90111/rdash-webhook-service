@@ -1,5 +1,6 @@
 """Subscription management use cases."""
 
+import logging
 import secrets
 from dataclasses import dataclass
 from typing import Mapping, Sequence
@@ -9,6 +10,8 @@ from domain.interfaces import SubscriptionRepository
 
 
 SECRET_BYTES = 32
+
+logger = logging.getLogger("webhook.subscriptions")
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,18 @@ class CreateSubscription:
             secret=raw_secret,
         )
         persisted = self.repository.create(subscription)
+        logger.info(
+            "subscription_created",
+            extra={
+                "event": "subscription_created",
+                "component": "subscription_management",
+                "tenant_id": tenant_id,
+                "subscription_id": persisted.id,
+                "event_type": persisted.event_type,
+                "target_url": persisted.target_url,
+                "active": persisted.active,
+            },
+        )
         return CreateSubscriptionResult(subscription=persisted, secret=raw_secret)
 
 
@@ -45,7 +60,17 @@ class ListSubscriptions:
         self.repository = repository
 
     def __call__(self, *, tenant_id: str) -> Sequence[Subscription]:
-        return self.repository.list_by_tenant(tenant_id)
+        subscriptions = self.repository.list_by_tenant(tenant_id)
+        logger.debug(
+            "subscriptions_listed",
+            extra={
+                "event": "subscriptions_listed",
+                "component": "subscription_management",
+                "tenant_id": tenant_id,
+                "count": len(subscriptions),
+            },
+        )
+        return subscriptions
 
 
 class GetSubscription:
@@ -53,7 +78,17 @@ class GetSubscription:
         self.repository = repository
 
     def __call__(self, *, tenant_id: str, subscription_id: str) -> Subscription:
-        return self.repository.get_by_id(subscription_id, tenant_id)
+        subscription = self.repository.get_by_id(subscription_id, tenant_id)
+        logger.debug(
+            "subscription_retrieved",
+            extra={
+                "event": "subscription_retrieved",
+                "component": "subscription_management",
+                "tenant_id": tenant_id,
+                "subscription_id": subscription_id,
+            },
+        )
+        return subscription
 
 
 class PatchSubscription:
@@ -68,6 +103,7 @@ class PatchSubscription:
         changes: Mapping[str, object],
     ) -> Subscription:
         subscription = self.repository.get_by_id(subscription_id, tenant_id)
+        changed_fields = sorted(str(key) for key in changes.keys())
 
         if "event_type" in changes:
             subscription.event_type = str(changes["event_type"])
@@ -79,7 +115,19 @@ class PatchSubscription:
             else:
                 subscription.deactivate()
 
-        return self.repository.update(subscription)
+        updated_subscription = self.repository.update(subscription)
+        logger.info(
+            "subscription_updated",
+            extra={
+                "event": "subscription_updated",
+                "component": "subscription_management",
+                "tenant_id": tenant_id,
+                "subscription_id": subscription_id,
+                "changed_fields": changed_fields,
+                "active": updated_subscription.active,
+            },
+        )
+        return updated_subscription
 
 
 class DeleteSubscription:
@@ -88,3 +136,12 @@ class DeleteSubscription:
 
     def __call__(self, *, tenant_id: str, subscription_id: str) -> None:
         self.repository.delete(subscription_id, tenant_id)
+        logger.info(
+            "subscription_deleted",
+            extra={
+                "event": "subscription_deleted",
+                "component": "subscription_management",
+                "tenant_id": tenant_id,
+                "subscription_id": subscription_id,
+            },
+        )

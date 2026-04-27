@@ -1,5 +1,6 @@
 """Django persistence for tenant API keys and authentication lookups."""
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -10,6 +11,9 @@ from django.utils import timezone
 
 from data.models.models import Tenant, TenantAPIKey
 from domain.services import generate_api_key, get_api_key_prefix, hash_api_key
+
+
+logger = logging.getLogger("webhook.security")
 
 
 @dataclass(frozen=True)
@@ -67,7 +71,7 @@ class DjangoTenantAPIKeyRepository:
                     key_hash=hash_api_key(raw_key),
                     expires_at=expires_at,
                 )
-                return IssuedTenantAPIKey(
+                issued_key = IssuedTenantAPIKey(
                     id=str(model.id),
                     tenant_id=str(model.tenant_id),
                     name=model.name,
@@ -76,6 +80,19 @@ class DjangoTenantAPIKeyRepository:
                     expires_at=model.expires_at,
                     created_at=model.created_at,
                 )
+                logger.info(
+                    "tenant_api_key_persisted",
+                    extra={
+                        "event": "tenant_api_key_persisted",
+                        "component": "tenant_api_key_repository",
+                        "tenant_id": issued_key.tenant_id,
+                        "api_key_id": issued_key.id,
+                        "api_key_name": issued_key.name,
+                        "api_key_prefix": issued_key.key_prefix,
+                        "expires_at": issued_key.expires_at,
+                    },
+                )
+                return issued_key
             except IntegrityError:
                 continue
 
@@ -102,7 +119,7 @@ class DjangoTenantAPIKeyRepository:
 
         TenantAPIKey.objects.filter(id=model.id).update(last_used_at=now)
         model.last_used_at = now
-        return AuthenticatedTenantAPIKey(
+        authenticated_key = AuthenticatedTenantAPIKey(
             id=str(model.id),
             tenant_id=str(model.tenant_id),
             tenant_name=model.tenant.name,
@@ -112,6 +129,19 @@ class DjangoTenantAPIKeyRepository:
             expires_at=model.expires_at,
             last_used_at=model.last_used_at,
         )
+        logger.info(
+            "tenant_api_key_authenticated",
+            extra={
+                "event": "tenant_api_key_authenticated",
+                "component": "tenant_api_key_repository",
+                "tenant_id": authenticated_key.tenant_id,
+                "api_key_id": authenticated_key.id,
+                "api_key_name": authenticated_key.name,
+                "api_key_prefix": authenticated_key.key_prefix,
+                "last_used_at": authenticated_key.last_used_at,
+            },
+        )
+        return authenticated_key
 
     @staticmethod
     def _get_active_tenant(tenant_id: str) -> Tenant:
