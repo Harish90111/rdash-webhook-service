@@ -1,5 +1,5 @@
-# Use Python 3.14 slim image
-FROM python:3.14-slim
+# Django 4.2 supports Python 3.8-3.12, so keep the container on 3.12.
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1

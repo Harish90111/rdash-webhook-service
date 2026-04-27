@@ -11,5 +11,7 @@ class InterfaceConfig(AppConfig):
 
     def ready(self) -> None:
         """Register optional schema/auth integrations after app loading."""
+        import interface.runtime_checks  # noqa: F401
+
         if find_spec("drf_spectacular") is not None:
             import interface.schema  # noqa: F401

@@ -76,3 +76,15 @@ class DjangoAdminTests(TestCase):
         assert api_key.key_hash
         messages = list(response.context["messages"])
         assert any("Raw API key for Primary integration key:" in str(message) for message in messages)
+
+    def test_webhook_event_changelist_renders(self):
+        WebhookEvent.objects.create(
+            tenant=self.tenant,
+            event_type="po.created",
+            payload={"id": "PO-1"},
+            idempotency_key="po-created-1",
+        )
+
+        response = self.client.get(reverse("admin:webhook_data_webhookevent_changelist"))
+
+        assert response.status_code == 200

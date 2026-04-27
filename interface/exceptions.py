@@ -100,7 +100,6 @@ STATUS_CODE_ERROR_DETAILS = {
     status.HTTP_429_TOO_MANY_REQUESTS: API_ERROR_DETAILS[Throttled],
 }
 
-
 def custom_exception_handler(exc, context):
     """Translate domain and DRF exceptions into one stable response envelope."""
     if isinstance(exc, WebhookDomainError):
