@@ -153,6 +153,7 @@ Full local mode with PostgreSQL and Redis:
 
 Prepare the app:
     .\.venv\Scripts\python manage.py migrate
+    .\.venv\Scripts\python manage.py ensure_admin_user
     .\.venv\Scripts\python manage.py check
 
 Run the web server:
@@ -171,6 +172,17 @@ Run the full stack with Docker:
     Write-Host $commands
 }
 
+function Ensure-AdminUser {
+    Assert-FileExists -Path $VenvPython -Message ".venv is missing. Run the Bootstrap action first."
+    Push-Location $RepositoryRoot
+    try {
+        & $VenvPython $ManagePyPath ensure_admin_user
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Bootstrap-Project {
     Write-Section "Bootstrap"
 
@@ -187,6 +199,7 @@ function Bootstrap-Project {
         }
 
         & $VenvPython $ManagePyPath migrate
+        & $VenvPython $ManagePyPath ensure_admin_user
         & $VenvPython $ManagePyPath check
     }
     finally {
@@ -195,6 +208,9 @@ function Bootstrap-Project {
 
     Write-Host ""
     Write-Host "Bootstrap completed."
+    Write-Host "Dev admin bootstrap runs automatically."
+    Write-Host "  Username : configured by DJANGO_SUPERUSER_USERNAME in .env (default: admin)"
+    Write-Host "  Password : configured by DJANGO_SUPERUSER_PASSWORD in .env (default: admin)"
     Write-Host "Next:"
     Write-Host "  Run server : powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunServer"
     Write-Host "  Run worker : powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunWorker"
@@ -205,6 +221,8 @@ function Run-Server {
     Assert-FileExists -Path $VenvPython -Message ".venv is missing. Run the Bootstrap action first."
     Push-Location $RepositoryRoot
     try {
+        & $VenvPython $ManagePyPath migrate
+        & $VenvPython $ManagePyPath ensure_admin_user
         & $VenvPython $ManagePyPath runserver
     }
     finally {
