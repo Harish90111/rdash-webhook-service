@@ -76,6 +76,8 @@ class APIKeyAuthenticationTests(SimpleTestCase):
         response = ProtectedTenantEchoView.as_view()(request)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data["error"]["code"] == "authentication_failed"
+        assert response.data["error"]["message"] == "Authentication failed."
 
     def test_malformed_authorization_header_returns_unauthorized(self):
         request = self.factory.get(
@@ -86,6 +88,8 @@ class APIKeyAuthenticationTests(SimpleTestCase):
         response = ProtectedTenantEchoView.as_view()(request)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data["error"]["code"] == "authentication_failed"
+        assert response.data["error"]["message"] == "Authentication failed."
 
     def test_create_api_key_command_prints_raw_key_once(self):
         issued_key = SimpleNamespace(

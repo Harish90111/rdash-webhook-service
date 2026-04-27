@@ -25,6 +25,8 @@ class DeliveryListingEndpointTests(TestCase):
         response = APIClient().get("/api/deliveries/")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data["error"]["code"] == "authentication_required"
+        assert response.data["error"]["message"] == "Authentication is required."
 
     def test_delivery_listing_is_tenant_scoped_paginated_and_filterable_by_status(self):
         subscription = Subscription.objects.create(
@@ -104,6 +106,8 @@ class DeliveryListingEndpointTests(TestCase):
         response = self._client_for_tenant(self.tenant).get("/api/deliveries/?status=unknown")
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["message"] == "Request validation failed."
 
 
 class DeliveryRetryEndpointTests(TestCase):
@@ -125,6 +129,8 @@ class DeliveryRetryEndpointTests(TestCase):
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data["error"]["code"] == "authentication_required"
+        assert response.data["error"]["message"] == "Authentication is required."
 
     def test_delivery_retry_queues_dead_letter_attempt_immediately(self):
         subscription = Subscription.objects.create(
@@ -190,6 +196,8 @@ class DeliveryRetryEndpointTests(TestCase):
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.data["error"]["code"] == "delivery_attempt_not_found"
+        assert response.data["error"]["message"] == "Delivery attempt was not found."
 
     def test_delivery_retry_rejects_non_retryable_status(self):
         subscription = Subscription.objects.create(
