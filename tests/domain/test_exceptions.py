@@ -3,6 +3,7 @@ from domain.exceptions import (
     DeliveryFailedError,
     DeliveryRetryNotAllowedError,
     DuplicateEventError,
+    DuplicateSubscriptionError,
     EventNotFoundError,
     SignatureVerificationError,
     SubscriptionNotFoundError,
@@ -37,6 +38,7 @@ def test_domain_error_accepts_custom_message_and_copies_context():
 def test_specific_domain_errors_have_stable_codes():
     expected = {
         SubscriptionNotFoundError: "subscription_not_found",
+        DuplicateSubscriptionError: "duplicate_subscription",
         EventNotFoundError: "event_not_found",
         DeliveryAttemptNotFoundError: "delivery_attempt_not_found",
         DuplicateEventError: "duplicate_event",

@@ -95,3 +95,9 @@ def test_event_ingestion_rejects_body_tenant_id():
     response = view(request)
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"]["code"] == "validation_error"
+    assert response.data["error"]["message"] == "Request validation failed."
+    assert response.data["error"]["context"]["details"]["non_field_errors"][0] == {
+        "message": "tenant_id must come from authentication.",
+        "code": "invalid",
+    }
