@@ -1,6 +1,7 @@
 """Django outbox repository and atomic event persistence helper."""
 
 from datetime import timedelta
+import logging
 from typing import Mapping, Optional, Sequence
 
 from django.db import IntegrityError, transaction
@@ -16,6 +17,8 @@ from domain.exceptions import DuplicateEventError, EventNotFoundError, WebhookDo
 
 
 DEFAULT_FANOUT_TASK_NAME = "interface.tasks.fanout_event"
+
+logger = logging.getLogger("webhook.outbox")
 
 
 class OutboxMessageNotFoundError(WebhookDomainError):
@@ -45,13 +48,26 @@ class DjangoOutboxRepository:
     ) -> OutboxMessage:
         self._ensure_event_exists(event.id, event.tenant_id)
         try:
-            return OutboxMessage.objects.create(
+            message = OutboxMessage.objects.create(
                 tenant_id=event.tenant_id,
                 event_id=event.id,
                 task_name=task_name,
                 queue_name=queue_name,
                 payload=dict(payload or {"event_id": event.id, "tenant_id": event.tenant_id}),
             )
+            logger.info(
+                "outbox_message_created",
+                extra={
+                    "event": "outbox_message_created",
+                    "component": "outbox_repository",
+                    "tenant_id": event.tenant_id,
+                    "event_id": event.id,
+                    "outbox_message_id": str(message.id),
+                    "task_name": task_name,
+                    "queue_name": queue_name or "webhooks.fanout",
+                },
+            )
+            return message
         except IntegrityError as exc:
             raise DuplicateOutboxMessageError(
                 context={
@@ -97,7 +113,18 @@ class DjangoOutboxRepository:
                     locked_at=now,
                     locked_by=locked_by,
                 )
-            return list(OutboxMessage.objects.filter(id__in=message_ids))
+            locked_messages = list(OutboxMessage.objects.filter(id__in=message_ids))
+            if locked_messages:
+                logger.info(
+                    "outbox_batch_locked",
+                    extra={
+                        "event": "outbox_batch_locked",
+                        "component": "outbox_repository",
+                        "locked_by": locked_by,
+                        "count": len(locked_messages),
+                    },
+                )
+            return locked_messages
 
     def mark_published(self, message_id: str, tenant_id: str) -> None:
         updated_count = OutboxMessage.objects.filter(
@@ -114,6 +141,15 @@ class DjangoOutboxRepository:
             raise OutboxMessageNotFoundError(
                 context={"message_id": message_id, "tenant_id": tenant_id}
             )
+        logger.info(
+            "outbox_message_published",
+            extra={
+                "event": "outbox_message_published",
+                "component": "outbox_repository",
+                "tenant_id": tenant_id,
+                "outbox_message_id": message_id,
+            },
+        )
 
     def release_for_retry(
         self,
@@ -137,6 +173,17 @@ class DjangoOutboxRepository:
             raise OutboxMessageNotFoundError(
                 context={"message_id": message_id, "tenant_id": tenant_id}
             )
+        logger.warning(
+            "outbox_message_released_for_retry",
+            extra={
+                "event": "outbox_message_released_for_retry",
+                "component": "outbox_repository",
+                "tenant_id": tenant_id,
+                "outbox_message_id": message_id,
+                "available_at": available_at or timezone.now(),
+                "error_message": error_message[:2000],
+            },
+        )
 
     def mark_failed(
         self,
@@ -160,6 +207,17 @@ class DjangoOutboxRepository:
             raise OutboxMessageNotFoundError(
                 context={"message_id": message_id, "tenant_id": tenant_id}
             )
+        logger.error(
+            "outbox_message_failed",
+            extra={
+                "event": "outbox_message_failed",
+                "component": "outbox_repository",
+                "tenant_id": tenant_id,
+                "outbox_message_id": message_id,
+                "available_at": available_at or timezone.now(),
+                "error_message": error_message[:2000],
+            },
+        )
 
     @staticmethod
     def _ensure_event_exists(event_id: str, tenant_id: str) -> None:

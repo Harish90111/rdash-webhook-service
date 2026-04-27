@@ -49,11 +49,17 @@ celery -A config beat -l info
 
 ## 3. Bootstrap a tenant
 
-Create an admin user:
+Ensure the local admin user exists:
 
 ```bash
-python manage.py createsuperuser
+python manage.py ensure_admin_user
 ```
+
+The bootstrap script and Docker web startup already run this automatically.
+By default the local admin credentials come from `.env`:
+
+- `DJANGO_SUPERUSER_USERNAME=admin`
+- `DJANGO_SUPERUSER_PASSWORD=admin`
 
 Open <http://localhost:8000/admin/> and:
 

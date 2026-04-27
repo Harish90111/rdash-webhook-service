@@ -30,6 +30,6 @@
 ## Follow-Up Notes
 
 - The assignment checklist is now complete.
-- Remaining follow-up work is polish rather than missing scope, such as richer
-  metrics for delivery lag and a more explicit OpenAPI auth scheme for the
-  custom API key authentication.
+- Remaining follow-up work is operational polish rather than missing scope.
+- The main repo-level follow-up is upgrading local Python past `3.8` to remove
+  the `cryptography` deprecation warning during checks and tests.

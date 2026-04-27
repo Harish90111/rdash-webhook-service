@@ -1,5 +1,6 @@
 """Event ingestion use cases."""
 
+import logging
 from dataclasses import dataclass
 from typing import Callable, Mapping, Optional
 
@@ -10,6 +11,8 @@ from domain.services import build_idempotency_key, normalize_idempotency_key
 
 
 PersistEventWithOutbox = Callable[[WebhookEvent], WebhookEvent]
+
+logger = logging.getLogger("webhook.events")
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,17 @@ class IngestEvent:
             normalized_key,
         )
         if existing_event is not None:
+            logger.info(
+                "event_ingestion_replayed",
+                extra={
+                    "event": "event_ingestion_replayed",
+                    "component": "event_ingestion",
+                    "tenant_id": tenant_id,
+                    "event_id": existing_event.id,
+                    "event_type": existing_event.event_type,
+                    "idempotency_key": normalized_key,
+                },
+            )
             return IngestEventResult(event=existing_event, created=False)
 
         event = WebhookEvent(
@@ -70,7 +84,29 @@ class IngestEvent:
                 normalized_key,
             )
             if existing_event is not None:
+                logger.info(
+                    "event_ingestion_duplicate_race_resolved",
+                    extra={
+                        "event": "event_ingestion_duplicate_race_resolved",
+                        "component": "event_ingestion",
+                        "tenant_id": tenant_id,
+                        "event_id": existing_event.id,
+                        "event_type": existing_event.event_type,
+                        "idempotency_key": normalized_key,
+                    },
+                )
                 return IngestEventResult(event=existing_event, created=False)
             raise
 
+        logger.info(
+            "event_ingested",
+            extra={
+                "event": "event_ingested",
+                "component": "event_ingestion",
+                "tenant_id": tenant_id,
+                "event_id": persisted_event.id,
+                "event_type": persisted_event.event_type,
+                "idempotency_key": normalized_key,
+            },
+        )
         return IngestEventResult(event=persisted_event, created=True)
