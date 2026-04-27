@@ -25,6 +25,27 @@ Successful responses use:
 
 Errors are returned through the DRF exception layer with a stable error shape.
 
+Example error response:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Request validation failed.",
+    "context": {
+      "details": {
+        "event_type": [
+          {
+            "message": "This field is required.",
+            "code": "required"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ## Public Endpoints
 
 ### `GET /api/health/`
