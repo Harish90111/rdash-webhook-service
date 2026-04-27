@@ -4,7 +4,7 @@ import time
 
 from django.conf import settings
 from django.db import connection
-from django.db.models import Count, Q
+from django.db.models import Count, Min, Q
 from django.utils import timezone
 
 from data.models.models import (
@@ -89,7 +89,11 @@ class TenantMetricsService:
         )
         event_counts = WebhookEvent.objects.filter(tenant_id=tenant_id).aggregate(
             received=Count("id"),
-            processed=Count("id", filter=Q(processed=True)),
+            processed_count=Count("id", filter=Q(processed=True)),
+            oldest_pending_received_at=Min(
+                "received_at",
+                filter=Q(processed=False),
+            ),
         )
         delivery_counts = self._delivery_counts(tenant_id)
         outbox_counts = OutboxMessage.objects.filter(tenant_id=tenant_id).aggregate(
@@ -98,10 +102,20 @@ class TenantMetricsService:
             in_progress=Count("id", filter=Q(status=OutboxStatus.IN_PROGRESS)),
             published=Count("id", filter=Q(status=OutboxStatus.PUBLISHED)),
             failed=Count("id", filter=Q(status=OutboxStatus.FAILED)),
+            oldest_backlog_available_at=Min(
+                "available_at",
+                filter=Q(
+                    status__in=[
+                        OutboxStatus.PENDING,
+                        OutboxStatus.IN_PROGRESS,
+                        OutboxStatus.FAILED,
+                    ]
+                ),
+            ),
         )
 
         received_events = event_counts["received"] or 0
-        processed_events = event_counts["processed"] or 0
+        processed_events = event_counts["processed_count"] or 0
         completed_deliveries = delivery_counts["success"] + delivery_counts["dead_letter"]
         success_rate = round((delivery_counts["success"] / completed_deliveries) * 100, 2) if completed_deliveries else 0.0
         failure_rate = round((delivery_counts["dead_letter"] / completed_deliveries) * 100, 2) if completed_deliveries else 0.0
@@ -117,12 +131,16 @@ class TenantMetricsService:
                 "received": received_events,
                 "processed": processed_events,
                 "pending": max(received_events - processed_events, 0),
+                "oldest_pending_age_seconds": self._age_seconds(
+                    event_counts.get("oldest_pending_received_at")
+                ),
             },
             "deliveries": {
                 "total": delivery_counts["total"],
                 "completed": completed_deliveries,
                 "success_rate": success_rate,
                 "failure_rate": failure_rate,
+                "lag_seconds": delivery_counts["lag_seconds"],
                 "by_status": {
                     "pending": delivery_counts["pending"],
                     "in_progress": delivery_counts["in_progress"],
@@ -137,6 +155,9 @@ class TenantMetricsService:
                 "backlog": (outbox_counts["pending"] or 0)
                 + (outbox_counts["in_progress"] or 0)
                 + (outbox_counts["failed"] or 0),
+                "oldest_backlog_age_seconds": self._age_seconds(
+                    outbox_counts.get("oldest_backlog_available_at")
+                ),
                 "by_status": {
                     "pending": outbox_counts["pending"] or 0,
                     "in_progress": outbox_counts["in_progress"] or 0,
@@ -159,5 +180,26 @@ class TenantMetricsService:
             failed=Count("id", filter=Q(status=DeliveryStatus.FAILED)),
             retrying=Count("id", filter=Q(status=DeliveryStatus.RETRYING)),
             dead_letter=Count("id", filter=Q(status=DeliveryStatus.DEAD_LETTER)),
+            oldest_active_created_at=Min(
+                "created_at",
+                filter=Q(
+                    status__in=[
+                        DeliveryStatus.PENDING,
+                        DeliveryStatus.IN_PROGRESS,
+                        DeliveryStatus.FAILED,
+                        DeliveryStatus.RETRYING,
+                    ]
+                ),
+            ),
         )
-        return {key: value or 0 for key, value in summary.items()}
+        counts = {key: value or 0 for key, value in summary.items()}
+        counts["lag_seconds"] = TenantMetricsService._age_seconds(
+            summary.get("oldest_active_created_at")
+        )
+        return counts
+
+    @staticmethod
+    def _age_seconds(timestamp):
+        if timestamp is None:
+            return 0.0
+        return round(max(0.0, (timezone.now() - timestamp).total_seconds()), 2)

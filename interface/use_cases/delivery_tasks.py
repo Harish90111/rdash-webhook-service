@@ -2,12 +2,14 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 from domain.entities import DeliveryAttempt, DeliveryStatus
 from domain.exceptions import DeliveryFailedError, DuplicateEventError
 from domain.interfaces import (
+    CircuitBreaker,
     DeliveryAttemptRepository,
     EventRepository,
     HttpGateway,
@@ -16,6 +18,9 @@ from domain.interfaces import (
     SubscriptionRepository,
 )
 from domain.services import build_signature_headers, get_next_retry_time, matches_wildcard, should_retry
+
+
+logger = logging.getLogger("webhook.delivery")
 
 
 def tenant_queue_name(tenant_id: str, *, buckets: int = 16) -> str:
@@ -55,6 +60,17 @@ class FanOutEvent:
             for subscription in self.subscription_repository.list_active_by_tenant(tenant_id)
             if matches_wildcard(event.event_type, subscription.event_type)
         ]
+        logger.info(
+            "fanout_event_prepared",
+            extra={
+                "event": "fanout_event_prepared",
+                "component": "fanout_worker",
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+                "event_type": event.event_type,
+                "matched_count": len(matching_subscriptions),
+            },
+        )
 
         enqueued_count = 0
         for subscription in matching_subscriptions:
@@ -84,6 +100,19 @@ class FanOutEvent:
             }:
                 self.enqueue_delivery(attempt, tenant_id)
                 enqueued_count += 1
+            else:
+                logger.debug(
+                    "fanout_delivery_attempt_skipped",
+                    extra={
+                        "event": "fanout_delivery_attempt_skipped",
+                        "component": "fanout_worker",
+                        "tenant_id": tenant_id,
+                        "event_id": event.id,
+                        "subscription_id": subscription.id,
+                        "attempt_id": attempt.id,
+                        "status": attempt.status.value,
+                    },
+                )
 
         self.event_repository.mark_processed(event.id, tenant_id)
         return enqueued_count
@@ -100,6 +129,7 @@ class DeliverWebhook:
         delivery_attempt_repository: DeliveryAttemptRepository,
         http_gateway: HttpGateway,
         enqueue_retry: Callable[[DeliveryAttempt, str, float], None],
+        circuit_breaker: Optional[CircuitBreaker] = None,
         max_retries: int,
         base_retry_delay: float,
         max_retry_delay: float,
@@ -112,6 +142,7 @@ class DeliverWebhook:
         self.delivery_attempt_repository = delivery_attempt_repository
         self.http_gateway = http_gateway
         self.enqueue_retry = enqueue_retry
+        self.circuit_breaker = circuit_breaker
         self.max_retries = max_retries
         self.base_retry_delay = base_retry_delay
         self.max_retry_delay = max_retry_delay
@@ -122,13 +153,48 @@ class DeliverWebhook:
     def __call__(self, *, attempt_id: str, tenant_id: str) -> DeliveryAttempt:
         attempt = self.delivery_attempt_repository.claim_for_delivery(attempt_id, tenant_id)
         if attempt is None:
-            return self.delivery_attempt_repository.get_by_id(attempt_id, tenant_id)
+            existing_attempt = self.delivery_attempt_repository.get_by_id(attempt_id, tenant_id)
+            logger.info(
+                "delivery_attempt_claim_skipped",
+                extra={
+                    "event": "delivery_attempt_claim_skipped",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt_id,
+                    "status": existing_attempt.status.value,
+                },
+            )
+            return existing_attempt
 
         event = self.event_repository.get_by_id(attempt.event_id, tenant_id)
         subscription = self.subscription_repository.get_by_id(attempt.subscription_id, tenant_id)
 
         body = self._build_body(event)
         timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+        if self.circuit_breaker is not None:
+            breaker_decision = self.circuit_breaker.before_request(
+                tenant_id=tenant_id,
+                target_url=subscription.target_url,
+            )
+            if not breaker_decision.allowed:
+                logger.warning(
+                    "delivery_blocked_by_circuit_breaker",
+                    extra={
+                        "event": "delivery_blocked_by_circuit_breaker",
+                        "component": "delivery_worker",
+                        "tenant_id": tenant_id,
+                        "attempt_id": attempt_id,
+                        "subscription_id": subscription.id,
+                        "target_url": subscription.target_url,
+                        "retry_after_seconds": breaker_decision.retry_after_seconds,
+                    },
+                )
+                return self._record_failure(
+                    attempt,
+                    tenant_id,
+                    "Circuit breaker open for target URL.",
+                    retry_delay_seconds=breaker_decision.retry_after_seconds,
+                )
         try:
             signing_secret = self._subscription_signing_secret(subscription)
             response = self.http_gateway.post(
@@ -150,10 +216,32 @@ class DeliverWebhook:
                 )
             )
             if response.is_success:
+                if self.circuit_breaker is not None:
+                    self.circuit_breaker.record_success(
+                        tenant_id=tenant_id,
+                        target_url=subscription.target_url,
+                    )
                 attempt.mark_success(response.status_code, response.body)
                 return self.delivery_attempt_repository.update(attempt, tenant_id)
 
+            if self.circuit_breaker is not None:
+                self.circuit_breaker.record_failure(
+                    tenant_id=tenant_id,
+                    target_url=subscription.target_url,
+                )
             error_message = f"Webhook endpoint returned HTTP {response.status_code}."
+            logger.warning(
+                "delivery_attempt_http_failure",
+                extra={
+                    "event": "delivery_attempt_http_failure",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt_id,
+                    "subscription_id": subscription.id,
+                    "target_url": subscription.target_url,
+                    "status_code": response.status_code,
+                },
+            )
             return self._record_failure(
                 attempt,
                 tenant_id,
@@ -162,6 +250,23 @@ class DeliverWebhook:
                 response_body=response.body,
             )
         except Exception as exc:
+            if self.circuit_breaker is not None:
+                self.circuit_breaker.record_failure(
+                    tenant_id=tenant_id,
+                    target_url=subscription.target_url,
+                )
+            logger.warning(
+                "delivery_attempt_transport_failure",
+                extra={
+                    "event": "delivery_attempt_transport_failure",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt_id,
+                    "subscription_id": subscription.id,
+                    "target_url": subscription.target_url,
+                    "error": str(exc) or exc.__class__.__name__,
+                },
+            )
             return self._record_failure(attempt, tenant_id, str(exc) or exc.__class__.__name__)
 
     def _record_failure(
@@ -172,6 +277,7 @@ class DeliverWebhook:
         *,
         status_code: Optional[int] = None,
         response_body: Optional[str] = None,
+        retry_delay_seconds: Optional[float] = None,
     ) -> DeliveryAttempt:
         safe_error_message = error_message or "Webhook delivery failed."
         attempt.mark_failed(safe_error_message, status_code=status_code, response_body=response_body)
@@ -182,14 +288,47 @@ class DeliverWebhook:
                 max_delay=self.max_retry_delay,
                 jitter_factor=self.retry_jitter,
             )
+            if retry_delay_seconds is not None:
+                circuit_retry_at = datetime.utcnow() + timedelta(
+                    seconds=max(0.0, retry_delay_seconds)
+                )
+                if circuit_retry_at > next_retry_at:
+                    next_retry_at = circuit_retry_at
             attempt.mark_retrying(next_retry_at)
             persisted_attempt = self.delivery_attempt_repository.update(attempt, tenant_id)
             countdown_seconds = max(0.0, (next_retry_at - datetime.utcnow()).total_seconds())
             self.enqueue_retry(persisted_attempt, tenant_id, countdown_seconds)
+            logger.warning(
+                "delivery_attempt_retry_scheduled",
+                extra={
+                    "event": "delivery_attempt_retry_scheduled",
+                    "component": "delivery_worker",
+                    "tenant_id": tenant_id,
+                    "attempt_id": attempt.id,
+                    "status_code": status_code,
+                    "attempt_number": persisted_attempt.attempt_number,
+                    "next_retry_at": next_retry_at,
+                    "countdown_seconds": countdown_seconds,
+                    "error_message": safe_error_message,
+                },
+            )
             return persisted_attempt
 
         attempt.mark_dead_letter(safe_error_message)
-        return self.delivery_attempt_repository.update(attempt, tenant_id)
+        dead_letter_attempt = self.delivery_attempt_repository.update(attempt, tenant_id)
+        logger.error(
+            "delivery_attempt_dead_lettered",
+            extra={
+                "event": "delivery_attempt_dead_lettered",
+                "component": "delivery_worker",
+                "tenant_id": tenant_id,
+                "attempt_id": attempt.id,
+                "status_code": status_code,
+                "attempt_number": dead_letter_attempt.attempt_number,
+                "error_message": safe_error_message,
+            },
+        )
+        return dead_letter_attempt
 
     @staticmethod
     def _build_body(event) -> str:
@@ -225,8 +364,8 @@ class DeliverWebhook:
     ):
         headers = {
             "Content-Type": "application/json",
-            "X-Webhook-Event": event_id,
-            "X-Webhook-Event-Type": event_type,
+            "X-Event-Id": event_id,
+            "X-Event-Type": event_type,
         }
         headers.update(build_signature_headers(signing_secret, timestamp, body))
         return headers

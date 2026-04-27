@@ -87,5 +87,15 @@ class DeliveryAttemptRepository(Protocol):
     def list_for_event(self, event_id: str, tenant_id: str) -> Sequence[DeliveryAttempt]:
         ...
 
+    def list_by_tenant(
+        self,
+        tenant_id: str,
+        *,
+        status: Optional[str] = None,
+        event_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+    ) -> Sequence[DeliveryAttempt]:
+        ...
+
     def update(self, attempt: DeliveryAttempt, tenant_id: str) -> DeliveryAttempt:
         ...

@@ -6,6 +6,7 @@ from django import forms
 from django.contrib import admin, messages
 
 from data.models.models import (
+    CircuitBreakerState,
     DeliveryAttempt,
     OutboxMessage,
     Subscription,
@@ -202,3 +203,20 @@ class OutboxMessageAdmin(admin.ModelAdmin):
     search_fields = ("id", "task_name", "event__id", "tenant__name", "tenant__slug")
     autocomplete_fields = ("tenant", "event")
     readonly_fields = ("id", "created_at", "updated_at", "published_at")
+
+
+@admin.register(CircuitBreakerState)
+class CircuitBreakerStateAdmin(admin.ModelAdmin):
+    list_display = (
+        "tenant",
+        "target_url",
+        "state",
+        "consecutive_failures",
+        "opened_at",
+        "last_failure_at",
+        "last_success_at",
+    )
+    list_filter = ("state", "tenant")
+    search_fields = ("target_url", "tenant__name", "tenant__slug")
+    autocomplete_fields = ("tenant",)
+    readonly_fields = ("id", "created_at", "updated_at")

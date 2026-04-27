@@ -2,6 +2,8 @@ import pytest
 
 from domain.entities import DeliveryAttempt, Subscription, WebhookEvent
 from domain.interfaces import (
+    CircuitBreaker,
+    CircuitBreakerDecision,
     DeliveryAttemptRepository,
     EventRepository,
     HttpGateway,
@@ -76,6 +78,16 @@ class InMemoryDeliveryAttemptRepository:
     def list_for_event(self, event_id: str, tenant_id: str):
         return []
 
+    def list_by_tenant(
+        self,
+        tenant_id: str,
+        *,
+        status: str = None,
+        event_id: str = None,
+        subscription_id: str = None,
+    ):
+        return []
+
     def update(self, attempt: DeliveryAttempt, tenant_id: str) -> DeliveryAttempt:
         return attempt
 
@@ -85,10 +97,22 @@ class RecordingHttpGateway:
         return HttpResponse(status_code=204, elapsed_seconds=0.1)
 
 
+class InMemoryCircuitBreaker:
+    def before_request(self, *, tenant_id: str, target_url: str) -> CircuitBreakerDecision:
+        return CircuitBreakerDecision(allowed=True, state="closed")
+
+    def record_success(self, *, tenant_id: str, target_url: str) -> None:
+        return None
+
+    def record_failure(self, *, tenant_id: str, target_url: str) -> None:
+        return None
+
+
 def test_repository_protocols_are_runtime_checkable():
     assert isinstance(InMemorySubscriptionRepository(), SubscriptionRepository)
     assert isinstance(InMemoryEventRepository(), EventRepository)
     assert isinstance(InMemoryDeliveryAttemptRepository(), DeliveryAttemptRepository)
+    assert isinstance(InMemoryCircuitBreaker(), CircuitBreaker)
 
 
 def test_http_gateway_protocol_is_runtime_checkable():

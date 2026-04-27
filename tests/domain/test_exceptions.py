@@ -1,6 +1,7 @@
 from domain.exceptions import (
     DeliveryAttemptNotFoundError,
     DeliveryFailedError,
+    DeliveryRetryNotAllowedError,
     DuplicateEventError,
     EventNotFoundError,
     SignatureVerificationError,
@@ -40,6 +41,7 @@ def test_specific_domain_errors_have_stable_codes():
         DeliveryAttemptNotFoundError: "delivery_attempt_not_found",
         DuplicateEventError: "duplicate_event",
         DeliveryFailedError: "delivery_failed",
+        DeliveryRetryNotAllowedError: "delivery_retry_not_allowed",
         SignatureVerificationError: "signature_verification_failed",
     }
 

@@ -1,5 +1,6 @@
 """Django implementation of the webhook event repository contract."""
 
+import logging
 from typing import Optional
 
 from django.db import IntegrityError
@@ -9,6 +10,9 @@ from data.models.models import Tenant
 from data.models.models import WebhookEvent as WebhookEventModel
 from domain.entities import WebhookEvent
 from domain.exceptions import DuplicateEventError, EventNotFoundError
+
+
+logger = logging.getLogger("webhook.events")
 
 
 class DjangoEventRepository:
@@ -33,7 +37,19 @@ class DjangoEventRepository:
                     "idempotency_key": event.idempotency_key,
                 }
             ) from exc
-        return self._to_domain(model)
+        persisted_event = self._to_domain(model)
+        logger.info(
+            "event_persisted",
+            extra={
+                "event": "event_persisted",
+                "component": "event_repository",
+                "tenant_id": persisted_event.tenant_id,
+                "event_id": persisted_event.id,
+                "event_type": persisted_event.event_type,
+                "idempotency_key": persisted_event.idempotency_key,
+            },
+        )
+        return persisted_event
 
     def get_by_id(self, event_id: str, tenant_id: str) -> WebhookEvent:
         return self._to_domain(self._get_model(event_id, tenant_id))
@@ -58,6 +74,15 @@ class DjangoEventRepository:
         ).update(processed=True, processed_at=timezone.now())
         if updated_count == 0:
             raise EventNotFoundError(context={"event_id": event_id, "tenant_id": tenant_id})
+        logger.info(
+            "event_marked_processed",
+            extra={
+                "event": "event_marked_processed",
+                "component": "event_repository",
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+            },
+        )
 
     @staticmethod
     def _ensure_tenant_exists(tenant_id: str) -> None:
