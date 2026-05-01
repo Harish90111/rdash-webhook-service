@@ -1,0 +1,19 @@
+x-production-env: &production-env
+  - ./config/environments/production.env
+
+services:
+  postgres:
+    env_file: *production-env
+
+  redis:
+
+  web:
+    env_file: *production-env
+    ports:
+      - "8000:8000"
+
+  celery-worker:
+    env_file: *production-env
+
+  celery-beat:
+    env_file: *production-env

@@ -14,18 +14,20 @@ step-by-step commands for bootstrapping and running the server locally.
 - Docker Desktop and Docker Compose for container-based setup (optional)
 
 .EXAMPLES
-powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action Help
-powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action Bootstrap -UseSqlite
-powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunServer
-powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunWorker
-powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunBeat
-powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action Docker
+powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action Help -EnvironmentName development
+powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action Bootstrap -EnvironmentName development -UseSqlite
+powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunServer -EnvironmentName staging
+powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunWorker -EnvironmentName staging
+powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action RunBeat -EnvironmentName production
+powershell -ExecutionPolicy Bypass -File .\bin\setup.ps1 -Action Docker -EnvironmentName development
 #>
 
 [CmdletBinding()]
 param(
     [ValidateSet("Help", "Bootstrap", "RunServer", "RunWorker", "RunBeat", "Docker")]
     [string]$Action = "Help",
+    [ValidateSet("development", "staging", "production")]
+    [string]$EnvironmentName = "development",
     [switch]$UseSqlite
 )
 
@@ -38,6 +40,9 @@ $VenvPython = Join-Path $VenvDirectory "Scripts\python.exe"
 $VenvCelery = Join-Path $VenvDirectory "Scripts\celery.exe"
 $EnvExamplePath = Join-Path $RepositoryRoot ".env.example"
 $EnvPath = Join-Path $RepositoryRoot ".env"
+$EnvironmentTemplatePath = Join-Path $RepositoryRoot ("config\environments\{0}.env" -f $EnvironmentName)
+$ComposeBasePath = Join-Path $RepositoryRoot "docker-compose.yml"
+$ComposeOverridePath = Join-Path $RepositoryRoot ("docker-compose.{0}.yml" -f $EnvironmentName)
 $RequirementsPath = Join-Path $RepositoryRoot "requirements.txt"
 $ManagePyPath = Join-Path $RepositoryRoot "manage.py"
 
@@ -95,6 +100,19 @@ function Ensure-EnvironmentFile {
     }
 }
 
+function Assert-EnvironmentTemplateExists {
+    Assert-FileExists `
+        -Path $EnvironmentTemplatePath `
+        -Message ("Environment template not found: {0}" -f $EnvironmentTemplatePath)
+}
+
+function Set-SessionEnvironment {
+    Assert-EnvironmentTemplateExists
+    $env:APP_ENV = $EnvironmentName
+    $env:ENV_FILE = $EnvironmentTemplatePath
+    Write-Host "Using APP_ENV=$EnvironmentName with ENV_FILE=$EnvironmentTemplatePath"
+}
+
 function Enable-SqliteMode {
     Ensure-EnvironmentFile
 
@@ -137,11 +155,20 @@ function Show-StepByStepCommands {
 Repository root:
     cd "$RepositoryRoot"
 
+Choose an environment template:
+    development -> config/environments/development.env
+    staging     -> config/environments/staging.env
+    production  -> config/environments/production.env
+
 Bootstrap the project:
     python -m venv .venv
     .\.venv\Scripts\python -m pip install --upgrade pip
     .\.venv\Scripts\python -m pip install -r requirements.txt
     Copy-Item .env.example .env
+
+Run local commands against a selected template:
+    `$env:APP_ENV="$EnvironmentName"
+    `$env:ENV_FILE="$EnvironmentTemplatePath"
 
 Lightweight local mode with SQLite:
     Add this line to .env:
@@ -165,8 +192,14 @@ Run the Celery worker:
 Run Celery Beat:
     .\.venv\Scripts\celery -A config beat -l info
 
-Run the full stack with Docker:
-    docker-compose up --build
+Run the full stack with Docker for development:
+    docker compose -f docker-compose.yml -f docker-compose.development.yml up --build
+
+Run the full stack with Docker for staging:
+    docker compose -f docker-compose.yml -f docker-compose.staging.yml up --build
+
+Run the full stack with Docker for production:
+    docker compose -f docker-compose.yml -f docker-compose.production.yml up --build
 "@
 
     Write-Host $commands
@@ -188,6 +221,7 @@ function Bootstrap-Project {
 
     Ensure-VirtualEnvironment
     Ensure-EnvironmentFile
+    Set-SessionEnvironment
 
     Push-Location $RepositoryRoot
     try {
@@ -219,6 +253,7 @@ function Bootstrap-Project {
 
 function Run-Server {
     Assert-FileExists -Path $VenvPython -Message ".venv is missing. Run the Bootstrap action first."
+    Set-SessionEnvironment
     Push-Location $RepositoryRoot
     try {
         & $VenvPython $ManagePyPath migrate
@@ -232,6 +267,7 @@ function Run-Server {
 
 function Run-Worker {
     Assert-FileExists -Path $VenvCelery -Message "Celery is not available in .venv. Run the Bootstrap action first."
+    Set-SessionEnvironment
     Push-Location $RepositoryRoot
     try {
         & $VenvCelery -A config worker -l info
@@ -243,6 +279,7 @@ function Run-Worker {
 
 function Run-Beat {
     Assert-FileExists -Path $VenvCelery -Message "Celery is not available in .venv. Run the Bootstrap action first."
+    Set-SessionEnvironment
     Push-Location $RepositoryRoot
     try {
         & $VenvCelery -A config beat -l info
@@ -254,9 +291,12 @@ function Run-Beat {
 
 function Run-DockerStack {
     Assert-CommandAvailable -CommandName "docker" -InstallHint "Install Docker Desktop."
+    Assert-EnvironmentTemplateExists
+    Assert-FileExists -Path $ComposeBasePath -Message "docker-compose.yml is missing."
+    Assert-FileExists -Path $ComposeOverridePath -Message ("Compose override not found: {0}" -f $ComposeOverridePath)
     Push-Location $RepositoryRoot
     try {
-        & docker-compose up --build
+        & docker compose -f $ComposeBasePath -f $ComposeOverridePath up --build
     }
     finally {
         Pop-Location

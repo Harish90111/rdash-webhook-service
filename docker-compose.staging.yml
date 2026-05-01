@@ -1,0 +1,30 @@
+x-staging-env: &staging-env
+  - ./config/environments/staging.env
+
+services:
+  postgres:
+    env_file: *staging-env
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6380:6379"
+
+  web:
+    env_file: *staging-env
+    ports:
+      - "8001:8000"
+      - "5679:5678"
+    volumes:
+      - .:/app
+
+  celery-worker:
+    env_file: *staging-env
+    volumes:
+      - .:/app
+
+  celery-beat:
+    env_file: *staging-env
+    volumes:
+      - .:/app

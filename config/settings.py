@@ -10,8 +10,6 @@ Clean Architecture structure:
 from importlib.util import find_spec
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 from config.env import (
     DEFAULT_DEV_SECRET_KEY,
     VALID_APP_ENVS,
@@ -25,21 +23,22 @@ from config.env import (
     env_int,
     env_list,
     env_str,
+    load_environment_files,
     validate_runtime_settings,
 )
 
-# Load environment variables
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env and optional environment templates.
+load_environment_files(BASE_DIR)
 
 # =============================================================================
 # SECURITY SETTINGS
 # =============================================================================
 
 APP_ENV = env_choice("APP_ENV", "development", choices=VALID_APP_ENVS)
-DEBUG = env_bool("DEBUG", APP_ENV != "production")
+DEBUG = env_bool("DEBUG", APP_ENV in {"development", "staging", "test"})
 SECRET_KEY = env_str("DJANGO_SECRET_KEY", DEFAULT_DEV_SECRET_KEY)
 ALLOWED_HOSTS = env_list(
     "ALLOWED_HOSTS",
@@ -50,6 +49,7 @@ validate_runtime_settings(
     app_env=APP_ENV,
     secret_key=SECRET_KEY,
     allowed_hosts=ALLOWED_HOSTS,
+    debug=DEBUG,
 )
 
 # =============================================================================

@@ -1,0 +1,30 @@
+x-development-env: &development-env
+  - ./config/environments/development.env
+
+services:
+  postgres:
+    env_file: *development-env
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  web:
+    env_file: *development-env
+    ports:
+      - "8000:8000"
+      - "5678:5678"
+    volumes:
+      - .:/app
+
+  celery-worker:
+    env_file: *development-env
+    volumes:
+      - .:/app
+
+  celery-beat:
+    env_file: *development-env
+    volumes:
+      - .:/app

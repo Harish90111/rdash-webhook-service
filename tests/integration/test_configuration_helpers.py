@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from config.env import (
     build_database_settings,
     env_bool,
     env_list,
+    load_environment_files,
     validate_runtime_settings,
 )
 
@@ -86,6 +88,7 @@ def test_validate_runtime_settings_rejects_insecure_production_defaults():
             app_env="production",
             secret_key=DEFAULT_DEV_SECRET_KEY,
             allowed_hosts=["api.example.com"],
+            debug=False,
         )
 
     with pytest.raises(ImproperlyConfigured):
@@ -93,4 +96,68 @@ def test_validate_runtime_settings_rejects_insecure_production_defaults():
             app_env="production",
             secret_key="super-secret-production-key",
             allowed_hosts=[],
+            debug=False,
         )
+
+
+def test_validate_runtime_settings_rejects_debug_enabled_in_production():
+    with pytest.raises(ImproperlyConfigured):
+        validate_runtime_settings(
+            app_env="production",
+            secret_key="super-secret-production-key",
+            allowed_hosts=["api.example.com"],
+            debug=True,
+        )
+
+
+def test_load_environment_files_prefers_explicit_env_file(monkeypatch, tmp_path):
+    default_env = tmp_path / ".env"
+    default_env.write_text("APP_ENV=development\nDEBUG=False\n", encoding="utf-8")
+    env_dir = tmp_path / "config" / "environments"
+    env_dir.mkdir(parents=True)
+    explicit_env = env_dir / "staging.env"
+    explicit_env.write_text("APP_ENV=staging\nDEBUG=True\n", encoding="utf-8")
+
+    monkeypatch.setenv("ENV_FILE", "config/environments/staging.env")
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("DEBUG", raising=False)
+
+    load_environment_files(tmp_path)
+
+    assert os.getenv("APP_ENV") == "staging"
+    assert os.getenv("DEBUG") == "True"
+
+
+def test_load_environment_files_falls_back_to_app_env_template(monkeypatch, tmp_path):
+    env_dir = tmp_path / "config" / "environments"
+    env_dir.mkdir(parents=True)
+    production_env = env_dir / "production.env"
+    production_env.write_text("APP_ENV=production\nDEBUG=False\n", encoding="utf-8")
+
+    monkeypatch.delenv("ENV_FILE", raising=False)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("DEBUG", raising=False)
+
+    load_environment_files(tmp_path)
+
+    assert os.getenv("DEBUG") == "False"
+
+
+def test_load_environment_files_does_not_override_existing_dotenv_without_explicit_env_file(
+    monkeypatch,
+    tmp_path,
+):
+    default_env = tmp_path / ".env"
+    default_env.write_text("APP_ENV=development\nDEBUG=False\n", encoding="utf-8")
+    env_dir = tmp_path / "config" / "environments"
+    env_dir.mkdir(parents=True)
+    development_env = env_dir / "development.env"
+    development_env.write_text("APP_ENV=development\nDEBUG=True\n", encoding="utf-8")
+
+    monkeypatch.delenv("ENV_FILE", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("DEBUG", raising=False)
+
+    load_environment_files(tmp_path)
+
+    assert os.getenv("DEBUG") == "False"

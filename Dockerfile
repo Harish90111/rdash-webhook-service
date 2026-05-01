@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create logs directory
-RUN mkdir -p logs
+RUN mkdir -p logs && chmod +x ./bin/web-entrypoint.sh
 
 # Expose port
 EXPOSE 8000

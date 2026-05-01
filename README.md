@@ -35,13 +35,22 @@ story.
 
 ## Setup
 
+Environment-specific runtime templates are available for:
+
+- `development`
+- `staging`
+- `production`
+
+See [docs/ENVIRONMENT_SETUP.md](./docs/ENVIRONMENT_SETUP.md) for the full setup
+matrix, debugger ports, and the differences between debug and non-debug runs.
+
 ### Option 1: helper script
 
 On Windows PowerShell:
 
 ```powershell
-.\bin\setup.ps1 -Action Help
-.\bin\setup.ps1 -Action Bootstrap -UseSqlite
+.\bin\setup.ps1 -Action Help -EnvironmentName development
+.\bin\setup.ps1 -Action Bootstrap -EnvironmentName development -UseSqlite
 ```
 
 ### Option 2: manual setup
@@ -89,7 +98,14 @@ celery -A config beat -l info
 ### Docker Compose
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.development.yml up -d
+```
+
+Other compose targets:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 ```
 
 Local URLs:
