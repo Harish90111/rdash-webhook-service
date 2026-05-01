@@ -194,9 +194,17 @@ Run Celery Beat:
 
 Run the full stack with Docker for development:
     docker compose -f docker-compose.yml -f docker-compose.development.yml up --build
+    Debug attach ports:
+        web    -> 5678
+        worker -> 5680
+        beat   -> 5681
 
 Run the full stack with Docker for staging:
     docker compose -f docker-compose.yml -f docker-compose.staging.yml up --build
+    Debug attach ports:
+        web    -> 5679
+        worker -> 5690
+        beat   -> 5691
 
 Run the full stack with Docker for production:
     docker compose -f docker-compose.yml -f docker-compose.production.yml up --build

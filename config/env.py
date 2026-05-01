@@ -5,6 +5,7 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+from kombu import Exchange, Queue
 
 
 DEFAULT_DEV_SECRET_KEY = "django-insecure-dev-key-change-in-production"
@@ -182,6 +183,25 @@ def build_celery_task_annotations():
             "rate_limit": env_str("WEBHOOK_DELIVERY_RATE_LIMIT", "120/m"),
         },
     }
+
+
+def build_celery_task_queues(*, default_queue: str, tenant_queue_buckets: int):
+    """Return the Celery queues the worker must actively consume."""
+
+    def queue_for(name: str) -> Queue:
+        return Queue(name, Exchange(name, type="direct"), routing_key=name)
+
+    queue_names = [
+        default_queue,
+        "webhooks.outbox",
+        "webhooks.fanout",
+        "webhooks.delivery",
+    ]
+    queue_names.extend(
+        f"webhooks.delivery.tenant-{bucket:02d}"
+        for bucket in range(tenant_queue_buckets)
+    )
+    return tuple(queue_for(name) for name in queue_names)
 
 
 def build_celery_beat_schedule():

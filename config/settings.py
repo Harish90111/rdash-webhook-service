@@ -15,6 +15,7 @@ from config.env import (
     VALID_APP_ENVS,
     build_celery_beat_schedule,
     build_celery_task_annotations,
+    build_celery_task_queues,
     build_celery_transport_options,
     build_database_settings,
     env_bool,
@@ -245,6 +246,11 @@ CELERY_WORKER_SEND_TASK_EVENTS = env_bool("CELERY_WORKER_SEND_TASK_EVENTS", Fals
 CELERY_TASK_TIME_LIMIT = env_int("CELERY_TASK_TIME_LIMIT", 300, minimum=1)
 CELERY_TASK_SOFT_TIME_LIMIT = env_int("CELERY_TASK_SOFT_TIME_LIMIT", 240, minimum=1)
 CELERY_TASK_DEFAULT_QUEUE = env_str("CELERY_TASK_DEFAULT_QUEUE", "webhooks.default")
+WEBHOOK_TENANT_QUEUE_BUCKETS = env_int("WEBHOOK_TENANT_QUEUE_BUCKETS", 16, minimum=1)
+CELERY_TASK_QUEUES = build_celery_task_queues(
+    default_queue=CELERY_TASK_DEFAULT_QUEUE,
+    tenant_queue_buckets=WEBHOOK_TENANT_QUEUE_BUCKETS,
+)
 CELERY_TASK_ROUTES = {
     'interface.tasks.dispatch_outbox_batch': {'queue': 'webhooks.outbox'},
     'interface.tasks.fanout_event': {'queue': 'webhooks.fanout'},
@@ -288,7 +294,6 @@ WEBHOOK_OUTBOX_DISPATCH_BATCH_SIZE = env_int("WEBHOOK_OUTBOX_DISPATCH_BATCH_SIZE
 WEBHOOK_OUTBOX_STALE_LOCK_SECONDS = env_int("WEBHOOK_OUTBOX_STALE_LOCK_SECONDS", 300, minimum=1)
 WEBHOOK_OUTBOX_BASE_RETRY_DELAY = env_float("WEBHOOK_OUTBOX_BASE_RETRY_DELAY", 1.0, minimum=0.0)
 WEBHOOK_OUTBOX_MAX_RETRY_DELAY = env_float("WEBHOOK_OUTBOX_MAX_RETRY_DELAY", 60.0, minimum=0.0)
-WEBHOOK_TENANT_QUEUE_BUCKETS = env_int("WEBHOOK_TENANT_QUEUE_BUCKETS", 16, minimum=1)
 WEBHOOK_SECRET_ENCRYPTION_KEY = env_str("WEBHOOK_SECRET_ENCRYPTION_KEY", "")
 
 # =============================================================================

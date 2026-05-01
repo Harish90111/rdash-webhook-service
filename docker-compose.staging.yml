@@ -21,10 +21,14 @@ services:
 
   celery-worker:
     env_file: *staging-env
+    ports:
+      - "5690:5680"
     volumes:
       - .:/app
 
   celery-beat:
     env_file: *staging-env
+    ports:
+      - "5691:5681"
     volumes:
       - .:/app

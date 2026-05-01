@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured
 from config.env import (
     DEFAULT_DEV_SECRET_KEY,
     build_celery_task_annotations,
+    build_celery_task_queues,
     build_celery_transport_options,
     build_database_settings,
     env_bool,
@@ -80,6 +81,24 @@ def test_celery_helpers_use_environment_defaults(monkeypatch):
 
     assert build_celery_transport_options() == {"visibility_timeout": 7200}
     assert build_celery_task_annotations()["interface.tasks.deliver_webhook"]["rate_limit"] == "60/m"
+
+
+def test_build_celery_task_queues_includes_outbox_fanout_and_bucketed_delivery_queues():
+    queues = build_celery_task_queues(
+        default_queue="webhooks.default",
+        tenant_queue_buckets=4,
+    )
+
+    assert [queue.name for queue in queues] == [
+        "webhooks.default",
+        "webhooks.outbox",
+        "webhooks.fanout",
+        "webhooks.delivery",
+        "webhooks.delivery.tenant-00",
+        "webhooks.delivery.tenant-01",
+        "webhooks.delivery.tenant-02",
+        "webhooks.delivery.tenant-03",
+    ]
 
 
 def test_validate_runtime_settings_rejects_insecure_production_defaults():

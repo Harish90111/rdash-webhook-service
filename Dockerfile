@@ -25,7 +25,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create logs directory
-RUN mkdir -p logs && chmod +x ./bin/web-entrypoint.sh
+RUN mkdir -p logs \
+    && chmod +x ./bin/web-entrypoint.sh \
+    && chmod +x ./bin/celery-worker-entrypoint.sh \
+    && chmod +x ./bin/celery-beat-entrypoint.sh
 
 # Expose port
 EXPOSE 8000

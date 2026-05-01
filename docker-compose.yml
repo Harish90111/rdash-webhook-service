@@ -44,10 +44,7 @@ services:
 
   celery-worker:
     <<: *app-service
-    command:
-      - /bin/sh
-      - -c
-      - celery -A config worker -l "$${CELERY_LOG_LEVEL:-INFO}"
+    command: ["/bin/sh", "./bin/celery-worker-entrypoint.sh"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
@@ -56,10 +53,7 @@ services:
 
   celery-beat:
     <<: *app-service
-    command:
-      - /bin/sh
-      - -c
-      - celery -A config beat -l "$${CELERY_LOG_LEVEL:-INFO}"
+    command: ["/bin/sh", "./bin/celery-beat-entrypoint.sh"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"

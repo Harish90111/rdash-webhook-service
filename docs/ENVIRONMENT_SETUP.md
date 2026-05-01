@@ -67,7 +67,9 @@ docker compose -f docker-compose.yml -f docker-compose.development.yml up --buil
 Services:
 
 - web: `http://localhost:8000`
-- debugpy: `localhost:5678`
+- web debugpy: `localhost:5678`
+- worker debugpy: `localhost:5680`
+- beat debugpy: `localhost:5681`
 - postgres: `localhost:5432`
 - redis: `localhost:6379`
 
@@ -80,7 +82,9 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml up --build
 Services:
 
 - web: `http://localhost:8001`
-- debugpy: `localhost:5679`
+- web debugpy: `localhost:5679`
+- worker debugpy: `localhost:5690`
+- beat debugpy: `localhost:5691`
 - postgres: `localhost:5433`
 - redis: `localhost:6380`
 
@@ -128,15 +132,39 @@ The container web entrypoint supports:
 - `DEBUGPY_PORT`
 - `DEBUGPY_WAIT_FOR_CLIENT`
 
+The container worker entrypoint supports:
+
+- `CELERY_WORKER_DEBUGPY_ENABLE`
+- `CELERY_WORKER_DEBUGPY_PORT`
+- `CELERY_WORKER_DEBUGPY_WAIT_FOR_CLIENT`
+- `CELERY_WORKER_DEBUG_POOL`
+
+The container beat entrypoint supports:
+
+- `CELERY_BEAT_DEBUGPY_ENABLE`
+- `CELERY_BEAT_DEBUGPY_PORT`
+- `CELERY_BEAT_DEBUGPY_WAIT_FOR_CLIENT`
+
 Examples:
 
 - development template: debugger enabled on `5678`
-- staging template: debugger enabled on `5678` inside container, mapped to
+- development worker debugger enabled on `5680`
+- development beat debugger enabled on `5681`
+- staging template: web debugger enabled on `5678` inside container, mapped to
   host port `5679`
+- staging worker debugger enabled on `5680` inside container, mapped to host
+  port `5690`
+- staging beat debugger enabled on `5681` inside container, mapped to host
+  port `5691`
 - production template: debugger disabled
 
 If `DEBUGPY_WAIT_FOR_CLIENT=True`, the web server will pause at startup until a
 debugger attaches.
+
+If `CELERY_WORKER_DEBUGPY_WAIT_FOR_CLIENT=True` or
+`CELERY_BEAT_DEBUGPY_WAIT_FOR_CLIENT=True`, the worker or beat process will
+pause at startup until the debugger attaches. The worker defaults to `solo`
+pool in debug mode so breakpoints behave predictably.
 
 ## Why production behaves differently
 

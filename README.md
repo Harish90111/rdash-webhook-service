@@ -101,6 +101,15 @@ celery -A config beat -l info
 docker compose -f docker-compose.yml -f docker-compose.development.yml up -d
 ```
 
+The development override starts the whole stack in debug mode:
+
+- web debugger: `localhost:5678`
+- celery worker debugger: `localhost:5680`
+- celery beat debugger: `localhost:5681`
+
+So one compose command is enough to boot the web app, worker, and beat with
+attachable debugger ports.
+
 Other compose targets:
 
 ```bash
