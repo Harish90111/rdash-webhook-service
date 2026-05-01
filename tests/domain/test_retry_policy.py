@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -25,7 +25,7 @@ def test_should_retry_stops_at_max_retries():
 
 
 def test_get_next_retry_time_returns_future_datetime():
-    before = datetime.utcnow()
+    before = datetime.now(UTC)
     retry_at = get_next_retry_time(1, base_delay=1, max_delay=1, jitter_factor=0)
 
     assert retry_at > before

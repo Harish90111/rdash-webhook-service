@@ -1,7 +1,7 @@
 """Domain service for webhook delivery retry scheduling."""
 
 import random
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 
 def calculate_retry_delay(
@@ -41,7 +41,7 @@ def get_next_retry_time(
 ) -> datetime:
     """Get the datetime when the next retry should occur."""
     delay = calculate_retry_delay(attempt, base_delay, max_delay, jitter_factor)
-    return datetime.utcnow() + timedelta(seconds=delay)
+    return datetime.now(UTC) + timedelta(seconds=delay)
 
 
 def should_retry(attempt: int, max_retries: int = 5) -> bool:

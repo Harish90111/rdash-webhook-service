@@ -1,6 +1,12 @@
+import os
 from pathlib import Path
 
 import pytest
+
+
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("ENV_FILE", "config/environments/test.env")
+os.environ.setdefault("USE_SQLITE", "True")
 
 
 def pytest_collection_modifyitems(config, items):

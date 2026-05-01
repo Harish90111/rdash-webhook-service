@@ -5,6 +5,7 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.venv_old_py38/
 venv/
 env/
 ENV/
