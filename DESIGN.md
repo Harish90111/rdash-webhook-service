@@ -36,6 +36,9 @@ flowchart LR
     Delivery --> Target["Webhook Target"]
 ```
 
+For a fuller layer, runtime, and deployment view, see
+[docs/ARCHITECTURE_DIAGRAM.md](./docs/ARCHITECTURE_DIAGRAM.md).
+
 ## Ingestion Choice
 
 ### Chosen approach

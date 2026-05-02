@@ -24,7 +24,8 @@ The service follows Clean Architecture:
 - `data/`: Django ORM models, repository implementations, HTTP gateway
 
 See [DESIGN.md](./DESIGN.md) for the detailed reliability and crash-recovery
-story.
+story and [docs/ARCHITECTURE_DIAGRAM.md](./docs/ARCHITECTURE_DIAGRAM.md) for
+the graphical architecture views.
 
 ## Prerequisites
 
