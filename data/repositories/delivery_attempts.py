@@ -112,6 +112,22 @@ class DjangoDeliveryAttemptRepository:
             queryset = queryset.filter(subscription_id=subscription_id)
         return [self._to_domain(model) for model in queryset]
 
+    def list_overdue_retrying(self, *, limit: int) -> Sequence[tuple[DeliveryAttempt, str]]:
+        now = timezone.now()
+        queryset = (
+            DeliveryAttemptModel.objects.select_related("event", "subscription")
+            .filter(
+                status=DeliveryStatus.RETRYING.value,
+                next_retry_at__isnull=False,
+                next_retry_at__lte=now,
+            )
+            .order_by("next_retry_at", "created_at")[:limit]
+        )
+        return [
+            (self._to_domain(model), str(model.event.tenant_id))
+            for model in queryset
+        ]
+
     def update(self, attempt: DeliveryAttempt, tenant_id: str) -> DeliveryAttempt:
         model = self._get_model(attempt.id, tenant_id)
         model.status = attempt.status.value

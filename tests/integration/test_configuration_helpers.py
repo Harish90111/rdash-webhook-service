@@ -6,6 +6,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from config.env import (
     DEFAULT_DEV_SECRET_KEY,
+    build_celery_beat_schedule,
     build_celery_task_annotations,
     build_celery_task_queues,
     build_celery_transport_options,
@@ -99,6 +100,14 @@ def test_build_celery_task_queues_includes_outbox_fanout_and_bucketed_delivery_q
         "webhooks.delivery.tenant-02",
         "webhooks.delivery.tenant-03",
     ]
+
+
+def test_build_celery_beat_schedule_includes_retry_recovery():
+    schedule = build_celery_beat_schedule()
+
+    assert schedule["dispatch-webhook-outbox"]["task"] == "interface.tasks.dispatch_outbox_batch"
+    assert schedule["recover-delivery-retries"]["task"] == "interface.tasks.recover_delivery_retries"
+    assert schedule["recover-delivery-retries"]["schedule"] == 30.0
 
 
 def test_validate_runtime_settings_rejects_insecure_production_defaults():

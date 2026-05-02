@@ -5,6 +5,7 @@ from interface.use_cases.deliveries import ListDeliveryAttempts, RetryDeliveryAt
 from interface.use_cases.delivery_tasks import (
     DeliverWebhook,
     FanOutEvent,
+    RecoverOverdueDeliveryRetries,
     delivery_task_id,
     tenant_queue_name,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "ListDeliveryAttempts",
     "ListSubscriptions",
     "PatchSubscription",
+    "RecoverOverdueDeliveryRetries",
     "RetryDeliveryAttempt",
     "delivery_task_id",
     "tenant_queue_name",

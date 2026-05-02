@@ -253,6 +253,7 @@ CELERY_TASK_QUEUES = build_celery_task_queues(
 )
 CELERY_TASK_ROUTES = {
     'interface.tasks.dispatch_outbox_batch': {'queue': 'webhooks.outbox'},
+    'interface.tasks.recover_delivery_retries': {'queue': 'webhooks.default'},
     'interface.tasks.fanout_event': {'queue': 'webhooks.fanout'},
     'interface.tasks.deliver_webhook': {'queue': 'webhooks.delivery'},
 }

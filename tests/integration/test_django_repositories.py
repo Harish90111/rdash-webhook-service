@@ -318,6 +318,58 @@ class DjangoRepositoryTests(TestCase):
         assert [attempt.id for attempt in listed] == [success_attempt.id]
         assert [attempt.id for attempt in filtered_by_event] == [retrying_attempt.id]
 
+    def test_delivery_attempt_list_overdue_retrying_returns_due_attempts_with_tenant_ids(self):
+        subscription = self.subscriptions.create(
+            Subscription(
+                tenant_id=str(self.tenant.id),
+                event_type="po.created",
+                target_url="https://example.test/webhook",
+                secret="secret-hash",
+            )
+        )
+        future_subscription = self.subscriptions.create(
+            Subscription(
+                tenant_id=str(self.tenant.id),
+                event_type="po.updated",
+                target_url="https://example.test/other-webhook",
+                secret="secret-hash",
+            )
+        )
+        event = self.events.create(
+            WebhookEvent(
+                tenant_id=str(self.tenant.id),
+                event_type="po.created",
+                payload={"id": "PO-7"},
+            )
+        )
+        future_event = self.events.create(
+            WebhookEvent(
+                tenant_id=str(self.tenant.id),
+                event_type="po.updated",
+                payload={"id": "PO-8"},
+            )
+        )
+        overdue_attempt = self.attempts.create(
+            DeliveryAttempt(event_id=event.id, subscription_id=subscription.id),
+            str(self.tenant.id),
+        )
+        overdue_attempt.mark_retrying(timezone.now() - timedelta(seconds=10))
+        self.attempts.update(overdue_attempt, str(self.tenant.id))
+
+        future_attempt = self.attempts.create(
+            DeliveryAttempt(event_id=future_event.id, subscription_id=future_subscription.id),
+            str(self.tenant.id),
+        )
+        future_attempt.mark_retrying(timezone.now() + timedelta(seconds=60))
+        self.attempts.update(future_attempt, str(self.tenant.id))
+
+        recovered = self.attempts.list_overdue_retrying(limit=10)
+
+        assert len(recovered) == 1
+        recovered_attempt, recovered_tenant_id = recovered[0]
+        assert recovered_attempt.id == overdue_attempt.id
+        assert recovered_tenant_id == str(self.tenant.id)
+
 
 class DjangoTenantAPIKeyRepositoryTests(TestCase):
     def setUp(self):

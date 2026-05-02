@@ -215,4 +215,12 @@ def build_celery_beat_schedule():
                 minimum=0.1,
             ),
         },
+        "recover-delivery-retries": {
+            "task": "interface.tasks.recover_delivery_retries",
+            "schedule": env_float(
+                "WEBHOOK_DELIVERY_RECOVERY_INTERVAL_SECONDS",
+                30.0,
+                minimum=0.1,
+            ),
+        }
     }
