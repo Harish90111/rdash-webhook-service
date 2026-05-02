@@ -8,7 +8,11 @@ from rest_framework.exceptions import (
     ValidationError,
 )
 
-from domain.exceptions import DuplicateEventError, SubscriptionNotFoundError
+from domain.exceptions import (
+    DuplicateEventError,
+    DuplicateSubscriptionError,
+    SubscriptionNotFoundError,
+)
 from interface.exceptions import custom_exception_handler
 from interface.responses import error_response, success_response
 from interface.views.base import PrincipalTenantMixin
@@ -35,11 +39,17 @@ def test_error_response_uses_consistent_envelope():
 
 def test_custom_exception_handler_maps_domain_errors():
     duplicate_response = custom_exception_handler(DuplicateEventError(), {})
+    duplicate_subscription_response = custom_exception_handler(
+        DuplicateSubscriptionError(),
+        {},
+    )
     not_found_response = custom_exception_handler(SubscriptionNotFoundError(), {})
 
     assert duplicate_response.status_code == status.HTTP_409_CONFLICT
+    assert duplicate_subscription_response.status_code == status.HTTP_409_CONFLICT
     assert not_found_response.status_code == status.HTTP_404_NOT_FOUND
     assert duplicate_response.data["error"]["code"] == "duplicate_event"
+    assert duplicate_subscription_response.data["error"]["code"] == "duplicate_subscription"
     assert not_found_response.data["error"]["code"] == "subscription_not_found"
 
 

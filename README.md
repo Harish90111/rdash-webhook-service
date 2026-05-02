@@ -24,7 +24,8 @@ The service follows Clean Architecture:
 - `data/`: Django ORM models, repository implementations, HTTP gateway
 
 See [DESIGN.md](./DESIGN.md) for the detailed reliability and crash-recovery
-story.
+story and [docs/ARCHITECTURE_DIAGRAM.md](./docs/ARCHITECTURE_DIAGRAM.md) for
+the graphical architecture views.
 
 ## Prerequisites
 
@@ -35,13 +36,22 @@ story.
 
 ## Setup
 
+Environment-specific runtime templates are available for:
+
+- `development`
+- `staging`
+- `production`
+
+See [docs/ENVIRONMENT_SETUP.md](./docs/ENVIRONMENT_SETUP.md) for the full setup
+matrix, debugger ports, and the differences between debug and non-debug runs.
+
 ### Option 1: helper script
 
 On Windows PowerShell:
 
 ```powershell
-.\bin\setup.ps1 -Action Help
-.\bin\setup.ps1 -Action Bootstrap -UseSqlite
+.\bin\setup.ps1 -Action Help -EnvironmentName development
+.\bin\setup.ps1 -Action Bootstrap -EnvironmentName development -UseSqlite
 ```
 
 ### Option 2: manual setup
@@ -89,7 +99,23 @@ celery -A config beat -l info
 ### Docker Compose
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.development.yml up -d
+```
+
+The development override starts the whole stack in debug mode:
+
+- web debugger: `localhost:5678`
+- celery worker debugger: `localhost:5680`
+- celery beat debugger: `localhost:5681`
+
+So one compose command is enough to boot the web app, worker, and beat with
+attachable debugger ports.
+
+Other compose targets:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 ```
 
 Local URLs:

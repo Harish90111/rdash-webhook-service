@@ -23,6 +23,7 @@ from domain.exceptions import (
     DeliveryFailedError,
     DeliveryRetryNotAllowedError,
     DuplicateEventError,
+    DuplicateSubscriptionError,
     EventNotFoundError,
     SignatureVerificationError,
     SubscriptionNotFoundError,
@@ -40,6 +41,7 @@ DOMAIN_ERROR_STATUS = {
     DeliveryAttemptNotFoundError: status.HTTP_404_NOT_FOUND,
     DeliveryRetryNotAllowedError: status.HTTP_409_CONFLICT,
     DuplicateEventError: status.HTTP_409_CONFLICT,
+    DuplicateSubscriptionError: status.HTTP_409_CONFLICT,
     DeliveryFailedError: status.HTTP_502_BAD_GATEWAY,
     SignatureVerificationError: status.HTTP_401_UNAUTHORIZED,
     WebhookDomainError: status.HTTP_400_BAD_REQUEST,
@@ -88,6 +90,15 @@ API_ERROR_DETAILS = {
     },
 }
 
+STATUS_CODE_ERROR_DETAILS = {
+    status.HTTP_400_BAD_REQUEST: API_ERROR_DETAILS[ValidationError],
+    status.HTTP_401_UNAUTHORIZED: API_ERROR_DETAILS[AuthenticationFailed],
+    status.HTTP_403_FORBIDDEN: API_ERROR_DETAILS[PermissionDenied],
+    status.HTTP_404_NOT_FOUND: API_ERROR_DETAILS[NotFound],
+    status.HTTP_405_METHOD_NOT_ALLOWED: API_ERROR_DETAILS[MethodNotAllowed],
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: API_ERROR_DETAILS[UnsupportedMediaType],
+    status.HTTP_429_TOO_MANY_REQUESTS: API_ERROR_DETAILS[Throttled],
+}
 
 def custom_exception_handler(exc, context):
     """Translate domain and DRF exceptions into one stable response envelope."""
@@ -100,12 +111,11 @@ def custom_exception_handler(exc, context):
         )
 
     drf_response = drf_exception_handler(exc, context)
-    if drf_response is not None and isinstance(exc, APIException):
-        error_details = _details_for_api_exception(exc)
-        response_context = {"details": error_details}
+    if drf_response is not None:
+        response_context = {"details": _details_for_exception(exc, drf_response.data)}
         if isinstance(exc, Throttled) and exc.wait is not None:
             response_context["retry_after_seconds"] = exc.wait
-        mapped_error = _mapped_api_error(type(exc))
+        mapped_error = _mapped_api_error(exc, drf_response.status_code)
         return error_response(
             error_code=mapped_error["code"],
             message=mapped_error["message"],
@@ -136,17 +146,18 @@ def _status_for_domain_error(error_type: Type[WebhookDomainError]) -> int:
     return status.HTTP_400_BAD_REQUEST
 
 
-def _mapped_api_error(error_type: Type[APIException]) -> dict:
+def _mapped_api_error(exc, status_code: int) -> dict:
+    error_type = type(exc)
     for candidate in error_type.__mro__:
         if candidate in API_ERROR_DETAILS:
             return API_ERROR_DETAILS[candidate]
-    return API_ERROR_DETAILS[APIException]
+    return STATUS_CODE_ERROR_DETAILS.get(status_code, API_ERROR_DETAILS[APIException])
 
 
-def _details_for_api_exception(exc: APIException):
+def _details_for_exception(exc, response_data):
     if hasattr(exc, "get_full_details"):
         return _normalize_detail(exc.get_full_details())
-    return _normalize_detail(getattr(exc, "detail", str(exc)))
+    return _normalize_detail(response_data)
 
 
 def _normalize_detail(value):

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from domain.entities import DeliveryAttempt, DeliveryStatus, Subscription, WebhookEvent
 from domain.interfaces import CircuitBreakerDecision, HttpResponse
@@ -86,7 +86,7 @@ class MemoryDeliveryAttemptRepository:
         }:
             return None
         if attempt.status == DeliveryStatus.RETRYING and attempt.next_retry_at:
-            if attempt.next_retry_at > datetime.utcnow():
+            if attempt.next_retry_at > datetime.now(UTC):
                 return None
         attempt.mark_in_progress()
         return self.update(attempt, tenant_id)
@@ -290,7 +290,7 @@ def test_deliver_webhook_waits_for_future_retry_window():
     )
     attempts = MemoryDeliveryAttemptRepository()
     attempt = DeliveryAttempt(id="attempt-1", event_id=event.id, subscription_id=subscription.id)
-    attempt.mark_retrying(datetime.utcnow() + timedelta(seconds=60))
+    attempt.mark_retrying(datetime.now(UTC) + timedelta(seconds=60))
     attempts.create(attempt, "tenant-1")
     gateway = StaticHttpGateway(HttpResponse(status_code=204, body="ok"))
 

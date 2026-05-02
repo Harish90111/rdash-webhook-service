@@ -40,6 +40,13 @@ class SubscriptionNotFoundError(WebhookDomainError):
     safe_message = "Subscription was not found."
 
 
+class DuplicateSubscriptionError(WebhookDomainError):
+    """Raised when a tenant reuses the same event type and target URL."""
+
+    error_code = "duplicate_subscription"
+    safe_message = "A subscription already exists for this event type and target URL."
+
+
 class EventNotFoundError(WebhookDomainError):
     """Raised when a webhook event cannot be found for a tenant."""
 
@@ -86,6 +93,7 @@ __all__ = [
     "DeliveryAttemptNotFoundError",
     "DeliveryFailedError",
     "DeliveryRetryNotAllowedError",
+    "DuplicateSubscriptionError",
     "DuplicateEventError",
     "EventNotFoundError",
     "SignatureVerificationError",

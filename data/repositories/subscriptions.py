@@ -10,7 +10,7 @@ from data.models.models import Subscription as SubscriptionModel
 from data.models.models import Tenant
 from data.security import DjangoSubscriptionSecretCipher
 from domain.entities import Subscription
-from domain.exceptions import SubscriptionNotFoundError
+from domain.exceptions import DuplicateSubscriptionError, SubscriptionNotFoundError
 
 
 logger = logging.getLogger("webhook.subscriptions")
@@ -36,7 +36,13 @@ class DjangoSubscriptionRepository:
                 secret_encrypted=self.secret_cipher.encrypt(raw_secret),
             )
         except IntegrityError as exc:
-            raise ValueError("subscription violates a persistence constraint") from exc
+            raise DuplicateSubscriptionError(
+                context={
+                    "tenant_id": subscription.tenant_id,
+                    "event_type": subscription.event_type,
+                    "target_url": subscription.target_url,
+                }
+            ) from exc
         persisted_subscription = self._to_domain(model, secret=raw_secret)
         logger.info(
             "subscription_persisted",
@@ -85,7 +91,16 @@ class DjangoSubscriptionRepository:
             model.secret_hash = self._hash_secret(raw_secret)
             model.secret_encrypted = self.secret_cipher.encrypt(raw_secret)
             update_fields.extend(["secret_hash", "secret_encrypted"])
-        model.save(update_fields=update_fields)
+        try:
+            model.save(update_fields=update_fields)
+        except IntegrityError as exc:
+            raise DuplicateSubscriptionError(
+                context={
+                    "tenant_id": subscription.tenant_id,
+                    "event_type": subscription.event_type,
+                    "target_url": subscription.target_url,
+                }
+            ) from exc
         updated_subscription = self._to_domain(
             model,
             secret=subscription.secret,

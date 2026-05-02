@@ -1,5 +1,5 @@
-# Use Python 3.14 slim image
-FROM python:3.14-slim
+# Django 4.2 supports Python 3.8-3.12, so keep the container on 3.12.
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -25,7 +25,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create logs directory
-RUN mkdir -p logs
+RUN mkdir -p logs \
+    && chmod +x ./bin/web-entrypoint.sh \
+    && chmod +x ./bin/celery-worker-entrypoint.sh \
+    && chmod +x ./bin/celery-beat-entrypoint.sh
 
 # Expose port
 EXPOSE 8000

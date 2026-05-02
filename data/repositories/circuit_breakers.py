@@ -126,7 +126,7 @@ class DjangoCircuitBreaker(CircuitBreaker):
                         "component": "circuit_breaker",
                         "tenant_id": tenant_id,
                         "target_url": target_url,
-                        "previous_state": previous_state.value,
+                        "previous_state": str(previous_state),
                         "previous_failures": previous_failures,
                     },
                 )
@@ -169,7 +169,7 @@ class DjangoCircuitBreaker(CircuitBreaker):
                         "component": "circuit_breaker",
                         "tenant_id": tenant_id,
                         "target_url": target_url,
-                        "previous_state": previous_state.value,
+                        "previous_state": str(previous_state),
                         "consecutive_failures": state.consecutive_failures,
                         "failure_threshold": self.failure_threshold,
                     },

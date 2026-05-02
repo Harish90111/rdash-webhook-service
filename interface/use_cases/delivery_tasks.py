@@ -289,14 +289,17 @@ class DeliverWebhook:
                 jitter_factor=self.retry_jitter,
             )
             if retry_delay_seconds is not None:
-                circuit_retry_at = datetime.utcnow() + timedelta(
+                circuit_retry_at = datetime.now(timezone.utc) + timedelta(
                     seconds=max(0.0, retry_delay_seconds)
                 )
                 if circuit_retry_at > next_retry_at:
                     next_retry_at = circuit_retry_at
             attempt.mark_retrying(next_retry_at)
             persisted_attempt = self.delivery_attempt_repository.update(attempt, tenant_id)
-            countdown_seconds = max(0.0, (next_retry_at - datetime.utcnow()).total_seconds())
+            countdown_seconds = max(
+                0.0,
+                (next_retry_at - datetime.now(timezone.utc)).total_seconds(),
+            )
             self.enqueue_retry(persisted_attempt, tenant_id, countdown_seconds)
             logger.warning(
                 "delivery_attempt_retry_scheduled",

@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 
 RESERVED_LOG_RECORD_FIELDS = {
@@ -37,7 +37,10 @@ class StructuredJSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "timestamp": datetime.utcfromtimestamp(record.created).isoformat() + "Z",
+            "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat().replace(
+                "+00:00",
+                "Z",
+            ),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

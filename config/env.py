@@ -4,12 +4,41 @@ import os
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+from kombu import Exchange, Queue
 
 
 DEFAULT_DEV_SECRET_KEY = "django-insecure-dev-key-change-in-production"
 TRUE_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_VALUES = {"0", "false", "f", "no", "n", "off"}
-VALID_APP_ENVS = ("development", "test", "production")
+VALID_APP_ENVS = ("development", "staging", "test", "production")
+
+
+def load_environment_files(base_dir: Path) -> None:
+    """Load `.env` plus an optional environment-specific template."""
+
+    default_env_path = base_dir / ".env"
+    default_env_loaded = False
+    if default_env_path.exists():
+        load_dotenv(default_env_path, override=False)
+        default_env_loaded = True
+
+    explicit_env_file = os.getenv("ENV_FILE", "").strip()
+    if explicit_env_file:
+        candidate_path = Path(explicit_env_file)
+        if not candidate_path.is_absolute():
+            candidate_path = base_dir / candidate_path
+        if candidate_path.exists():
+            load_dotenv(candidate_path, override=True)
+        return
+
+    if default_env_loaded:
+        return
+
+    app_env = (os.getenv("APP_ENV") or "development").strip() or "development"
+    candidate_path = base_dir / "config" / "environments" / f"{app_env}.env"
+    if candidate_path.exists():
+        load_dotenv(candidate_path, override=True)
 
 
 def env_str(name: str, default: str = "", *, required: bool = False) -> str:
@@ -84,10 +113,18 @@ def env_choice(name: str, default: str, *, choices) -> str:
     return value
 
 
-def validate_runtime_settings(*, app_env: str, secret_key: str, allowed_hosts) -> None:
+def validate_runtime_settings(
+    *,
+    app_env: str,
+    secret_key: str,
+    allowed_hosts,
+    debug: bool,
+) -> None:
     """Fail fast on production settings that would be unsafe to deploy."""
     if app_env != "production":
         return
+    if debug:
+        raise ImproperlyConfigured("DEBUG must be disabled in production.")
     if not secret_key or secret_key == DEFAULT_DEV_SECRET_KEY or secret_key.startswith("django-insecure"):
         raise ImproperlyConfigured(
             "DJANGO_SECRET_KEY must be explicitly set to a non-development value in production."
@@ -146,6 +183,25 @@ def build_celery_task_annotations():
             "rate_limit": env_str("WEBHOOK_DELIVERY_RATE_LIMIT", "120/m"),
         },
     }
+
+
+def build_celery_task_queues(*, default_queue: str, tenant_queue_buckets: int):
+    """Return the Celery queues the worker must actively consume."""
+
+    def queue_for(name: str) -> Queue:
+        return Queue(name, Exchange(name, type="direct"), routing_key=name)
+
+    queue_names = [
+        default_queue,
+        "webhooks.outbox",
+        "webhooks.fanout",
+        "webhooks.delivery",
+    ]
+    queue_names.extend(
+        f"webhooks.delivery.tenant-{bucket:02d}"
+        for bucket in range(tenant_queue_buckets)
+    )
+    return tuple(queue_for(name) for name in queue_names)
 
 
 def build_celery_beat_schedule():

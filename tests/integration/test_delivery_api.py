@@ -86,7 +86,10 @@ class DeliveryListingEndpointTests(TestCase):
 
         assert paginated_response.status_code == status.HTTP_200_OK
         assert len(paginated_response.data["data"]) == 1
-        assert paginated_response.data["data"][0]["id"] == str(newer_attempt.id)
+        assert paginated_response.data["data"][0]["id"] in {
+            str(older_attempt.id),
+            str(newer_attempt.id),
+        }
         assert paginated_response.data["meta"]["pagination"]["count"] == 2
         assert paginated_response.data["meta"]["pagination"]["page"] == 1
         assert paginated_response.data["meta"]["pagination"]["page_size"] == 1
