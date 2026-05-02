@@ -372,3 +372,22 @@ class DeliverWebhook:
         }
         headers.update(build_signature_headers(signing_secret, timestamp, body))
         return headers
+
+
+class RecoverOverdueDeliveryRetries:
+    """Re-enqueue retrying attempts whose retry window has already elapsed."""
+
+    def __init__(
+        self,
+        *,
+        delivery_attempt_repository: DeliveryAttemptRepository,
+        enqueue_delivery: Callable[[DeliveryAttempt, str], None],
+    ) -> None:
+        self.delivery_attempt_repository = delivery_attempt_repository
+        self.enqueue_delivery = enqueue_delivery
+
+    def __call__(self, *, limit: int) -> int:
+        overdue_attempts = self.delivery_attempt_repository.list_overdue_retrying(limit=limit)
+        for attempt, tenant_id in overdue_attempts:
+            self.enqueue_delivery(attempt, tenant_id)
+        return len(overdue_attempts)

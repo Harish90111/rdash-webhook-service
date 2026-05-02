@@ -97,5 +97,18 @@ class DeliveryAttemptRepository(Protocol):
     ) -> Sequence[DeliveryAttempt]:
         ...
 
+    def list_overdue_retrying(
+        self,
+        *,
+        limit: int,
+    ) -> Sequence[tuple[DeliveryAttempt, str]]:
+        """
+        Return retrying attempts whose retry window has elapsed.
+
+        Each returned item includes the tenant id needed to safely re-enqueue
+        the attempt onto its tenant-scoped delivery queue.
+        """
+        ...
+
     def update(self, attempt: DeliveryAttempt, tenant_id: str) -> DeliveryAttempt:
         ...

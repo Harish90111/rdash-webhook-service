@@ -12,6 +12,7 @@ from domain.services import (
 from interface.use_cases.delivery_tasks import (
     DeliverWebhook,
     FanOutEvent,
+    RecoverOverdueDeliveryRetries,
     delivery_task_id,
     tenant_queue_name,
 )
@@ -117,6 +118,18 @@ class MemoryDeliveryAttemptRepository:
                 if attempt.subscription_id == subscription_id
             ]
         return attempts
+
+    def list_overdue_retrying(self, *, limit):
+        overdue = []
+        now = datetime.now(UTC)
+        for attempt in self.attempts.values():
+            if (
+                attempt.status == DeliveryStatus.RETRYING
+                and attempt.next_retry_at is not None
+                and attempt.next_retry_at <= now
+            ):
+                overdue.append((attempt, "tenant-1"))
+        return overdue[:limit]
 
     def update(self, attempt, tenant_id):
         self.attempts[(attempt.event_id, attempt.subscription_id)] = attempt
@@ -428,3 +441,32 @@ def test_deliver_webhook_dead_letters_after_retry_budget_is_exhausted():
 
     assert result.status == DeliveryStatus.DEAD_LETTER
     assert retries == []
+
+
+def test_recover_overdue_delivery_retries_enqueues_due_attempts_only():
+    attempts = MemoryDeliveryAttemptRepository()
+    due_attempt = DeliveryAttempt(
+        id="attempt-1",
+        event_id="event-1",
+        subscription_id="subscription-1",
+        status=DeliveryStatus.RETRYING,
+        next_retry_at=datetime.now(UTC) - timedelta(seconds=60),
+    )
+    future_attempt = DeliveryAttempt(
+        id="attempt-2",
+        event_id="event-2",
+        subscription_id="subscription-2",
+        status=DeliveryStatus.RETRYING,
+        next_retry_at=datetime.now(UTC) + timedelta(seconds=60),
+    )
+    attempts.create(due_attempt, "tenant-1")
+    attempts.create(future_attempt, "tenant-1")
+    enqueued = []
+
+    recovered = RecoverOverdueDeliveryRetries(
+        delivery_attempt_repository=attempts,
+        enqueue_delivery=lambda attempt, tenant_id: enqueued.append((attempt.id, tenant_id)),
+    )(limit=10)
+
+    assert recovered == 1
+    assert enqueued == [("attempt-1", "tenant-1")]

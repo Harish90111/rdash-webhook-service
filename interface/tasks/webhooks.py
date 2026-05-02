@@ -19,6 +19,7 @@ from data.repositories import (
 from interface.use_cases import (
     DeliverWebhook,
     FanOutEvent,
+    RecoverOverdueDeliveryRetries,
     delivery_task_id,
     tenant_queue_name,
 )
@@ -190,6 +191,73 @@ def dispatch_outbox_batch(self, limit=None, locked_by=None):
             "retry_count": retry_count,
             "limit": limit,
             "locked_by": locked_by,
+            **_task_request_context(self),
+        },
+    )
+
+
+@shared_task(name="interface.tasks.recover_delivery_retries", bind=True, ignore_result=True)
+def recover_delivery_retries(self, limit=None):
+    """Re-enqueue overdue retrying attempts in case a delayed retry task was lost."""
+    limit = limit or int(getattr(settings, "WEBHOOK_DELIVERY_RECOVERY_BATCH_SIZE", 100))
+
+    logger.info(
+        "delivery_retry_recovery_started",
+        extra={
+            "event": "delivery_retry_recovery_started",
+            "component": "delivery_recovery",
+            "limit": limit,
+            **_task_request_context(self),
+        },
+    )
+
+    def enqueue_delivery(attempt, tenant_id: str) -> None:
+        queue_name = _delivery_queue(tenant_id)
+        task_id = delivery_task_id(attempt.id)
+        logger.info(
+            "delivery_retry_recovery_enqueue_started",
+            extra={
+                "event": "delivery_retry_recovery_enqueue_started",
+                "component": "delivery_recovery",
+                "attempt_id": attempt.id,
+                "tenant_id": tenant_id,
+                "queue_name": queue_name,
+                "celery_task_id": task_id,
+                **_task_request_context(self),
+            },
+        )
+        deliver_webhook.apply_async(
+            kwargs={"attempt_id": attempt.id, "tenant_id": tenant_id},
+            queue=queue_name,
+            task_id=task_id,
+        )
+
+    try:
+        recovered_count = RecoverOverdueDeliveryRetries(
+            delivery_attempt_repository=DjangoDeliveryAttemptRepository(),
+            enqueue_delivery=enqueue_delivery,
+        )(limit=limit)
+    except Exception as exc:
+        logger.exception(
+            "delivery_retry_recovery_failed",
+            extra={
+                "event": "delivery_retry_recovery_failed",
+                "component": "delivery_recovery",
+                "limit": limit,
+                "error_type": exc.__class__.__name__,
+                "error_message": str(exc),
+                **_task_request_context(self),
+            },
+        )
+        raise
+
+    logger.info(
+        "delivery_retry_recovery_completed",
+        extra={
+            "event": "delivery_retry_recovery_completed",
+            "component": "delivery_recovery",
+            "limit": limit,
+            "recovered_count": recovered_count,
             **_task_request_context(self),
         },
     )
